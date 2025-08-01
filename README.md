@@ -158,7 +158,7 @@ graph TD;
     *   **特定のLLMモデルを指定して全ステップを実行:**
         `--model`引数で、デフォルトの`gemini-2.5-flash-lite`から任意のLLMモデルに変更できます。
         ```bash
-docker run --rm --env-file .env \
+        docker run --rm --env-file .env \
           -v "$(pwd)/output:/app/output" \
           -v "$(pwd)/paragraph_cleaning_prompt.md:/app/paragraph_cleaning_prompt.md" \
           -v "$(pwd)/entity_extraction_prompt.md:/app/entity_extraction_prompt.md" \
@@ -169,9 +169,9 @@ docker run --rm --env-file .env \
 
     *   **特定のステップから実行:**
         `--start-step`引数で開始ステップを指定できます。例えば、`step5`から実行する場合、正規化済みのファイル（`step4_`から始まるファイル）が`output`ディレクトリに存在している必要があります。
+        ### step5はentity_normalization_prompt.mdに依存しないため、マウントを省略
         ```bash
-# step5はentity_normalization_prompt.mdに依存しないため、マウントを省略
-docker run --rm --env-file .env \
+        docker run --rm --env-file .env \
           -v "$(pwd)/output:/app/output" \
           knowledge-graph-builder python -u src/main.py --start-step step5
         ```
