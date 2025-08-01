@@ -66,9 +66,9 @@ def load_prompt_template(file_path):
     with open(file_path, 'r', encoding='utf-8') as f:
         return f.read()
 
-def clean_paragraphs_with_llm_batch(paragraphs_with_source, prompt_template, batch_size=5, delay=15):
+def clean_paragraphs_with_llm_batch(paragraphs_with_source, prompt_template, model_name, batch_size=5, delay=15):
     """LLMを使用して段落をクレンジングする（バッチ処理）"""
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel(model_name)
     cleaned_data = []
     
     # 入力は段落オブジェクトのリスト
@@ -95,7 +95,7 @@ def clean_paragraphs_with_llm_batch(paragraphs_with_source, prompt_template, bat
             
             # クレンジング結果と元の出典情報を組み合わせる
             for idx, cleaned_text in enumerate(cleaned_paragraphs_batch):
-                if cleaned_text:
+                if cleaned_text and idx < len(batch_source_info):
                     original_source = batch_source_info[idx]['source_pages']
                     cleaned_data.append({
                         "paragraph": cleaned_text,
@@ -112,11 +112,11 @@ def clean_paragraphs_with_llm_batch(paragraphs_with_source, prompt_template, bat
             
     return cleaned_data
 
-def main():
+def main(model_name='gemini-1.5-flash-latest'):
     """メイン処理"""
-    input_path = "output/structured_text.json"
+    input_path = "output/step1_structured_text.json"
     prompt_template_path = "paragraph_cleaning_prompt.md"
-    output_cleaned_text_path = "output/cleaned_text.json"
+    output_cleaned_text_path = "output/step2a_cleaned_text.json"
 
     print("構造化されたテキストを読み込み中...")
     pages = load_structured_text(input_path)
@@ -129,7 +129,7 @@ def main():
     prompt_template = load_prompt_template(prompt_template_path)
 
     print("LLMを使用して段落をクレンジング中（バッチ処理）...")
-    cleaned_paragraphs = clean_paragraphs_with_llm_batch(paragraphs_with_source, prompt_template)
+    cleaned_paragraphs = clean_paragraphs_with_llm_batch(paragraphs_with_source, prompt_template, model_name)
 
     print(f"クレンジングされた段落を {output_cleaned_text_path} に保存中...")
     with open(output_cleaned_text_path, 'w', encoding='utf-8') as f:
