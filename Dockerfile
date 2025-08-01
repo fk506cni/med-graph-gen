@@ -5,8 +5,7 @@ FROM python:3.10-slim
 WORKDIR /app
 
 # 必要なシステムライブラリをインストール
-# (SudachiPyやGiNZAのビルドに必要な場合がある)
-RUN apt-get update && apt-get install -y --no-install-recommends     build-essential     && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential && rm -rf /var/lib/apt/lists/*
 
 # 依存ライブラリ定義ファイルをコピー
 COPY build/requirements.txt .
@@ -15,7 +14,7 @@ COPY build/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # GiNZAの学習済みモデルをダウンロード
-
+RUN python -m spacy download ja_core_news_lg
 
 # プロジェクトのソースコードをコピー
 COPY src/ ./src/
@@ -27,4 +26,3 @@ COPY paragraph_cleaning_prompt.md ./
 
 # メインスクリプトを実行するコマンド
 CMD ["python", "src/main.py"]
-

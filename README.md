@@ -125,7 +125,8 @@ graph TD;
 *   **使用ライブラリ:** GiNZA (依存構造解析)
 *   **処理フロー:**
     1.  `output/cleaned_text.json` と `output/entities.json` を読み込みます。
-    2.  （今後の実装）
+    2.  基本的な骨格が実装され、GiNZAを用いた係り受け解析の準備ができています。
+    3.  現時点では、空の`output/relations.json`を生成します。
 
 ### **ステップ3b: LLMベースのリレーション抽出 (step3b_llm_based_relations.py)**
 
@@ -165,12 +166,12 @@ graph TD;
 3.  **Dockerコンテナの実行:**
     *   **全ステップを実行:**
         ```bash
-        docker run --rm -v "$(pwd)/output":/app/output --env-file .env knowledge-graph-builder
+        docker run --rm -v /mnt/d/local_envs/med-graph-gen/output:/app/output --env-file .env knowledge-graph-builder
         ```
     *   **特定のステップから実行:**
         `--start-step`引数で開始ステップを指定できます。（例: `step2b`から開始）
         ```bash
-        docker run --rm -v "$(pwd)/output":/app/output --env-file .env knowledge-graph-builder python src/main.py --start-step step2b
+        docker run --rm -v /mnt/d/local_envs/med-graph-gen/output:/app/output --env-file .env knowledge-graph-builder python src/main.py --start-step step2b
         ```
 
     実行が完了すると、ローカルの `output` ディレクトリに中間ファイルや最終的なCSVが生成されます。
@@ -200,6 +201,11 @@ graph TD;
     "source_pages": [12, 13]
   }
 ]
+```
+
+**output/relations.json**
+```json
+[]
 ```
 
 ## **生成されるCSVの例**

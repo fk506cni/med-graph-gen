@@ -25,7 +25,18 @@
 
 *   The implementation of `step1`, `step2a`, and `step2b` is complete and verified.
 *   The system can now extract text from a specified page range, cleanse it at the paragraph level while retaining source page information, and then extract entities with their corresponding source pages.
-*   The project structure, Docker environment, and main execution script are all updated to reflect these changes.
+*   The project structure, Docker environment, and main execution scriptはすべてこれらの変更を反映するように更新されています。
+
+### Recent Updates (August 1, 2025)
+
+*   **Step 3a (Rule-based Relation Extraction) の骨格実装:**
+    *   `src/step3a_rule_based_relations.py` に基本的な処理フロー（ファイルの読み込み、GiNZAのロード、空の `relations.json` の出力）を実装しました。
+    *   `main.py` から `--start-step step3a` で実行可能です。
+*   **GiNZAモデルのロード問題の解決:**
+    *   `Dockerfile` および `requirements.txt` を修正し、`spacy.load("ja_core_news_lg")` でGiNZAモデルが正しくロードされるようにしました。
+    *   `numpy` のバージョン互換性問題を解決するため、`requirements.txt` に `numpy<2.0` を追加しました。
+*   **Docker実行コマンドの修正:**
+    *   `README.md` に記載されているDocker実行コマンドを、`$(pwd)` を使用しない絶対パス形式に修正しました。
 
 ### Next Steps
 
