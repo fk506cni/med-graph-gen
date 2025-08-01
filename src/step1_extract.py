@@ -33,14 +33,19 @@ def extract_text_from_pdf(pdf_path, start_page=None, end_page=None):
 def main():
     """メイン処理"""
     pdf_path = "input/c00543.pdf"
-    output_path = "output/structured_text.json"
-    start_page = 12
-    end_page = 22
+    output_path = "output/step1_structured_text.json"
+    # ページ範囲を指定しない場合はNoneに設定（全ページが対象となる）
+    start_page = None
+    end_page = None
 
     # outputディレクトリが存在しない場合は作成
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-    print(f"PDFから {start_page}ページから{end_page}ページまでのテキストを抽出中...")
+    if start_page and end_page:
+        print(f"PDFから {start_page}ページから{end_page}ページまでのテキストを抽出中...")
+    else:
+        print("PDFから全ページのテキストを抽出中...")
+
     structured_data = extract_text_from_pdf(pdf_path, start_page=start_page, end_page=end_page)
 
     print(f"構造化されたデータを {output_path} に保存中...")

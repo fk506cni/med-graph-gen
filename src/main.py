@@ -16,7 +16,16 @@ def main():
         choices=['step1', 'step2a', 'step2b', 'step3b', 'step4', 'step5'],
         help='パイプラインを開始するステップを指定します'
     )
+    parser.add_argument(
+        '--model',
+        type=str,
+        default='gemini-2.5-flash-lite',
+        help='使用するLLMモデルを指定します'
+    )
     args = parser.parse_args()
+
+    # LLMを必要とするステップのリスト
+    llm_steps = ['step2a', 'step2b', 'step3b', 'step4']
 
     # 利用可能なステップとそれに対応する関数をマッピング
     steps = {
@@ -39,7 +48,12 @@ def main():
         current_step = step_order[i]
         if current_step in steps:
             print(f"\n--- ステップ: {current_step} を開始します ---")
-            steps[current_step]()
+            # LLMを使用するステップにはモデル名を渡す
+            if current_step in llm_steps:
+                print(f"使用モデル: {args.model}")
+                steps[current_step](model_name=args.model)
+            else:
+                steps[current_step]()
             print(f"--- ステップ: {current_step} が完了しました ---")
         else:
             print(f"\n--- ステップ: {current_step} は未実装のためスキップします ---")

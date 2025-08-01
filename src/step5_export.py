@@ -4,10 +4,10 @@ import pandas as pd
 from collections import defaultdict
 
 # --- 定数 --- #
-INPUT_NORMALIZED_ENTITIES_PATH = "output/normalized_entities.json"
-INPUT_NORMALIZED_RELATIONS_PATH = "output/normalized_relations.jsonl"
-OUTPUT_NODES_PATH = "output/nodes.csv"
-OUTPUT_EDGES_PATH = "output/edges.csv"
+INPUT_NORMALIZED_ENTITIES_PATH = "output/step4_normalized_entities.json"
+INPUT_NORMALIZED_RELATIONS_PATH = "output/step4_normalized_relations.jsonl"
+OUTPUT_NODES_PATH = "output/step5_nodes.csv"
+OUTPUT_EDGES_PATH = "output/step5_edges.csv"
 
 # PDFのファイル名（データソースとして使用）
 PDF_FILENAME = "c00543.pdf"

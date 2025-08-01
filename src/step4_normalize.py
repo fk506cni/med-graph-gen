@@ -10,11 +10,11 @@ from tqdm import tqdm
 genai.configure(api_key=os.environ["GEMINI_API_KEY"])
 
 # 入出力ファイルのパス
-INPUT_ENTITIES_PATH = "output/entities.json"
-INPUT_RELATIONS_PATH = "output/relations.jsonl"
-OUTPUT_NORMALIZED_ENTITIES_PATH = "output/normalized_entities.json"
-OUTPUT_NORMALIZED_RELATIONS_PATH = "output/normalized_relations.jsonl"
-NORMALIZATION_MAP_PATH = "output/normalization_map.json"
+INPUT_ENTITIES_PATH = "output/step2b_entities.json"
+INPUT_RELATIONS_PATH = "output/step3b_relations.jsonl"
+OUTPUT_NORMALIZED_ENTITIES_PATH = "output/step4_normalized_entities.json"
+OUTPUT_NORMALIZED_RELATIONS_PATH = "output/step4_normalized_relations.jsonl"
+NORMALIZATION_MAP_PATH = "output/step4_normalization_map.json"
 PROMPT_TEMPLATE_PATH = "entity_normalization_prompt.md"
 
 # LLM呼び出しのパラメータ
@@ -46,10 +46,10 @@ def save_jsonl(data, path):
         for item in data:
             f.write(json.dumps(item, ensure_ascii=False) + '\n')
 
-def get_normalization_map_from_llm(entities):
+def get_normalization_map_from_llm(entities, model_name):
     """LLMを使用して正規化マッピングを取得し、多数決で最終版を生成する"""
     print("LLMを呼び出してエンティティの正規化マッピングを生成します...")
-    model = genai.GenerativeModel(LLM_MODEL)
+    model = genai.GenerativeModel(model_name)
     with open(PROMPT_TEMPLATE_PATH, 'r', encoding='utf-8') as f:
         prompt_template = f.read()
 
@@ -126,7 +126,7 @@ def normalize_relations(relations, normalization_map):
             normalized_relations.append(new_rel)
     return normalized_relations
 
-def main():
+def main(model_name='gemini-1.5-flash-latest'):
     """
     エンティティとリレーションを正規化するメイン関数
     """
@@ -142,7 +142,7 @@ def main():
     entities = load_json(INPUT_ENTITIES_PATH)
     relations = load_jsonl(INPUT_RELATIONS_PATH)
 
-    normalization_map = get_normalization_map_from_llm(entities)
+    normalization_map = get_normalization_map_from_llm(entities, model_name)
     save_json(normalization_map, NORMALIZATION_MAP_PATH)
     print(f"正規化マッピングを {NORMALIZATION_MAP_PATH} に保存しました。")
 

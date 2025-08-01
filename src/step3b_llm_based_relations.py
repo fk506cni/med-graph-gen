@@ -8,8 +8,10 @@ import google.generativeai as genai
 # --- 定数 ---
 DELAY_SECONDS = 15 # API呼び出しごとの待機時間（レート制限対策で延長）
 ENTITY_PAIR_BATCH_SIZE = 50 # 1回のLLM呼び出しで処理するエンティティペアの数
-OUTPUT_FILE = "output/relations.jsonl"
-MAX_TOTAL_BATCHES = 2 # テスト用に最大バッチ数を設定
+INPUT_CLEANED_TEXT_PATH = "output/step2a_cleaned_text.json"
+INPUT_ENTITIES_PATH = "output/step2b_entities.json"
+OUTPUT_FILE = "output/step3b_relations.jsonl"
+MAX_TOTAL_BATCHES = None # テスト用に最大バッチ数を設定 (Noneで無制限)
 
 print(f"デバッグ: ENTITY_PAIR_BATCH_SIZE: {ENTITY_PAIR_BATCH_SIZE}")
 print(f"デバッグ: DELAY_SECONDS: {DELAY_SECONDS}")
@@ -42,14 +44,14 @@ def load_prompt_template(file_path):
         print(f"エラー: プロンプトファイルが見つかりません: {file_path}")
         return None
 
-def extract_relations_in_batches(paragraph, entities_in_paragraph, prompt_template, total_batch_counter):
+def extract_relations_in_batches(model, paragraph, entities_in_paragraph, prompt_template, total_batch_counter):
     if len(entities_in_paragraph) < 2:
         return
 
     all_pairs = list(combinations(entities_in_paragraph, 2))
     
     for i in range(0, len(all_pairs), ENTITY_PAIR_BATCH_SIZE):
-        if total_batch_counter >= MAX_TOTAL_BATCHES:
+        if MAX_TOTAL_BATCHES is not None and total_batch_counter >= MAX_TOTAL_BATCHES:
             print("\nテスト用の最大バッチ数に達したため、処理を停止します。")
             return
 
@@ -62,7 +64,11 @@ def extract_relations_in_batches(paragraph, entities_in_paragraph, prompt_templa
         )
 
         try:
-            print(f"  - バッチ {total_batch_counter + 1}/{MAX_TOTAL_BATCHES} (段落内 {i//ENTITY_PAIR_BATCH_SIZE + 1}/{(len(all_pairs) + ENTITY_PAIR_BATCH_SIZE - 1)//ENTITY_PAIR_BATCH_SIZE}): {len(batch_pairs)}ペアを処理中...")
+            log_message = f"  - バッチ {total_batch_counter + 1}"
+            if MAX_TOTAL_BATCHES is not None:
+                log_message += f"/{MAX_TOTAL_BATCHES}"
+            log_message += f" (段落内 {i//ENTITY_PAIR_BATCH_SIZE + 1}/{(len(all_pairs) + ENTITY_PAIR_BATCH_SIZE - 1)//ENTITY_PAIR_BATCH_SIZE}): {len(batch_pairs)}ペアを処理中..."
+            print(log_message)
             response = model.generate_content(prompt)
             response_text = response.text.strip()
             
@@ -93,9 +99,28 @@ def extract_relations_in_batches(paragraph, entities_in_paragraph, prompt_templa
 
         time.sleep(DELAY_SECONDS)
 
-def main():
+def main(model_name='gemini-1.5-flash-latest'):
     print("--- ステップ: step3b を開始します ---")
     
+    # --- APIキーとモデルの設定 ---
+    print("デバッグ: APIキーの設定を開始します...")
+    try:
+        api_key = os.environ.get("GEMINI_API_KEY")
+        if not api_key:
+            raise KeyError("GEMINI_API_KEY 環境変数が設定されていません。")
+        genai.configure(api_key=api_key)
+        print("デバッグ: APIキーの設定が完了しました。")
+        
+        print(f"デバッグ: Geminiモデル「{model_name}」の初期化を開始します...")
+        model = genai.GenerativeModel(model_name)
+        print("デバッグ: Geminiモデルの初期化が完了しました。")
+    except KeyError as e:
+        print(f"エラー: {e}")
+        exit(1)
+    except Exception as e:
+        print(f"エラー: モデルの初期化中に予期せぬエラーが発生しました: {e}")
+        exit(1)
+
     # デバッグ: ファイルの存在確認と初期化
     print(f"デバッグ: {OUTPUT_FILE} の初期化を試みます...")
     try:
@@ -114,15 +139,15 @@ def main():
 
     # 入力ファイルの読み込み
     try:
-        print("デバッグ: output/cleaned_text.json の読み込みを開始します...")
-        with open("output/cleaned_text.json", "r", encoding="utf-8") as f:
+        print(f"デバッグ: {INPUT_CLEANED_TEXT_PATH} の読み込みを開始します...")
+        with open(INPUT_CLEANED_TEXT_PATH, "r", encoding="utf-8") as f:
             cleaned_text = json.load(f)
-        print("デバッグ: output/cleaned_text.json の読み込み完了。")
+        print(f"デバッグ: {INPUT_CLEANED_TEXT_PATH} の読み込み完了。")
         
-        print("デバッグ: output/entities.json の読み込みを開始します...")
-        with open("output/entities.json", "r", encoding="utf-8") as f:
+        print(f"デバッグ: {INPUT_ENTITIES_PATH} の読み込みを開始します...")
+        with open(INPUT_ENTITIES_PATH, "r", encoding="utf-8") as f:
             entities = json.load(f)
-        print("デバッグ: output/entities.json の読み込み完了。")
+        print(f"デバッグ: {INPUT_ENTITIES_PATH} の読み込み完了。")
 
     except FileNotFoundError as e:
         print(f"エラー: 入力ファイルが見つかりません: {e.filename}")
@@ -138,7 +163,7 @@ def main():
     total_relations_found = 0
     total_batch_counter = 0
     for i, item in enumerate(cleaned_text):
-        if total_batch_counter >= MAX_TOTAL_BATCHES:
+        if MAX_TOTAL_BATCHES is not None and total_batch_counter >= MAX_TOTAL_BATCHES:
             break
         paragraph = item["paragraph"]
         source_pages = item["source_pages"]
@@ -147,7 +172,7 @@ def main():
         
         entities_in_paragraph = [entity for entity in entities if entity['term'] in paragraph]
 
-        relations_generator = extract_relations_in_batches(paragraph, entities_in_paragraph, prompt_template, total_batch_counter)
+        relations_generator = extract_relations_in_batches(model, paragraph, entities_in_paragraph, prompt_template, total_batch_counter)
         
         with open(OUTPUT_FILE, "a", encoding="utf-8") as f:
             for result in relations_generator:

@@ -20,9 +20,9 @@ def load_prompt_template(file_path):
     with open(file_path, 'r', encoding='utf-8') as f:
         return f.read()
 
-def extract_entities_with_llm_batch(cleaned_data, prompt_template, batch_size=5, delay=15):
+def extract_entities_with_llm_batch(cleaned_data, prompt_template, model_name, batch_size=5, delay=15):
     """LLMを使用してエンティティを抽出する（バッチ処理）"""
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel(model_name)
     # エンティティごとに出典ページを記録するための辞書
     entity_sources = defaultdict(set)
 
@@ -79,11 +79,11 @@ def extract_entities_with_llm_batch(cleaned_data, prompt_template, batch_size=5,
     
     return final_entities
 
-def main():
+def main(model_name='gemini-1.5-flash-latest'):
     """メイン処理"""
-    input_path = "output/cleaned_text.json"
+    input_path = "output/step2a_cleaned_text.json"
     prompt_template_path = "entity_extraction_prompt.md"
-    output_entities_path = "output/entities.json"
+    output_entities_path = "output/step2b_entities.json"
 
     print("クレンジングされた段落データを読み込み中...")
     cleaned_data = load_cleaned_data(input_path)
@@ -92,7 +92,7 @@ def main():
     prompt_template = load_prompt_template(prompt_template_path)
 
     print("LLMを使用してエンティティを抽出中（バッチ処理）...")
-    entities = extract_entities_with_llm_batch(cleaned_data, prompt_template)
+    entities = extract_entities_with_llm_batch(cleaned_data, prompt_template, model_name)
 
     print(f"抽出されたエンティティを {output_entities_path} に保存中...")
     with open(output_entities_path, 'w', encoding='utf-8') as f:
