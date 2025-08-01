@@ -22,6 +22,8 @@ COPY src/ ./src/
 COPY input/ ./input/
 COPY empty_extract_prompt.md ./
 COPY batch_extract_prompt.md ./
+COPY entity_extraction_prompt.md ./
+COPY paragraph_cleaning_prompt.md ./
 
 # メインスクリプトを実行するコマンド
 CMD ["python", "src/main.py"]

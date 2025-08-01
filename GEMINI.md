@@ -1,20 +1,32 @@
-## Project Status: Initial Implementation Complete
+## Project Status: Step 1 & 2 Implemented with Enhancements
 
 **Objective:** Develop a system to generate a knowledge graph CSV from a PDF document.
 
-**Current State:**
+### Key Developments
 
-1.  **Project Structure:** The directory structure (`build`, `src`, `input`, `output`) has been created.
-2.  **Development Environment:**
-    *   A `Dockerfile` and a fully pinned `requirements.txt` have been created in the `build/` directory.
-    *   The Docker image `knowledge-graph-builder` now builds successfully.
-    *   Gemini APIキーは、ホストの`.env`ファイルに記載し、コンテナ実行時に`--env-file`オプションで渡すように変更しました。これにより、APIキーがDockerイメージに焼き込まれることを防ぎ、セキュリティを向上させています。
-3.  **Source Files:**
-    *   `src/step1_extract.py`: PDFから全てのテキストをページ単位で抽出するように実装を修正しました。
-    *   `src/step2_entities.py`: LLM（Gemini）を使用して、抽出されたテキストから医学的に無関係な情報（参考文献、引用番号、目次など）をクレンジングし、エンティティを抽出するように実装を修正しました。APIのレートリミットを考慮し、バッチ処理とAPI呼び出し間のウェイト（待機時間）を導入しています。
-    *   `src/main.py`: `step1_extract.py`と`step2_entities.py`を順次実行するように修正しました。
-    *   `empty_extract_prompt.md`と`batch_extract_prompt.md`: LLMによるテキストクレンジング用のプロンプトテンプレートを作成しました。
+1.  **Refined Step 2 (Text Cleansing & Entity Extraction):**
+    *   The original `step2_entities.py` was split into `step2a_clean_text.py` and `step2b_extract_entities.py` for better maintainability.
+    *   Entity extraction was updated to use the LLM (Gemini), replacing the initial GiNZA-based approach.
 
-**Next Steps:**
+2.  **Paragraph-based Processing:**
+    *   To handle sentences that span across pages, the pipeline was modified to operate on paragraphs instead of pages.
+    *   `step2a` now combines text from all pages, splits it into paragraphs, and then performs cleansing.
 
-*   Proceed with the implementation of the Python scripts as defined in `README.md`, starting with `src/step3a_rule_based_relations.py`.
+3.  **Source-Aware Data Structure:**
+    *   To ensure traceability, the data format for intermediate files (`cleaned_text.json`, `entities.json`) was updated. Each paragraph and entity is now stored as a JSON object that includes a `source_pages` field, linking it back to the original page numbers in the PDF.
+
+4.  **Flexible Pipeline Execution:**
+    *   `main.py` was enhanced with a command-line argument (`--start-step`) to allow the pipeline to be started from any specific step. This significantly speeds up development and testing by avoiding the need to re-run earlier, time-consuming steps (like API calls).
+
+5.  **Configurable Page Range:**
+    *   `step1_extract.py` was modified to allow specifying a `start_page` and `end_page`, making it easier to test and debug the pipeline on specific sections of the PDF.
+
+### Current State
+
+*   The implementation of `step1`, `step2a`, and `step2b` is complete and verified.
+*   The system can now extract text from a specified page range, cleanse it at the paragraph level while retaining source page information, and then extract entities with their corresponding source pages.
+*   The project structure, Docker environment, and main execution script are all updated to reflect these changes.
+
+### Next Steps
+
+*   Proceed with the implementation of `src/step3a_rule_based_relations.py` as defined in the updated `README.md`.

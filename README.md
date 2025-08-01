@@ -33,7 +33,8 @@ med-graph-gen/
 └── src/                    # Pythonソースコード
     ├── main.py
     ├── step1_extract.py
-    ├── step2_entities.py
+    ├── step2a_clean_text.py
+    ├── step2b_extract_entities.py
     ├── step3a_rule_based_relations.py
     ├── step3b_llm_based_relations.py
     ├── step4_normalize.py
@@ -45,31 +46,37 @@ med-graph-gen/
 ```mermaid
 graph TD;
     A[input/c00543.pdf] --> B(step1_extract.py);
-    B --> C[structured_text.json];
-    C --> D(step2_entities.py);
-    C --> E1(step3a_rule_based_relations.py);
-    C --> E2(step3b_llm_based_relations.py);
-    D --> F(step4_normalize.py);
-    E1 --> F;
-    E2 --> F;
-    F --> G(step5_export.py);
-    G --> H[output/nodes.csv];
-    G --> I[output/edges.csv];
+    B --> C[output/structured_text.json];
+    C --> D(step2a_clean_text.py);
+    D --> E[output/cleaned_text.json];
+    E --> F(step2b_extract_entities.py);
+    F --> G[output/entities.json];
+
+    E --> H1(step3a_rule_based_relations.py);
+    G --> H1;
+    E --> H2(step3b_llm_based_relations.py);
+    G --> H2;
+
+    G --> I(step4_normalize.py);
+    H1 --> I;
+    H2 --> I;
+
+    I --> J(step5_export.py);
+    J --> K[output/nodes.csv];
+    J --> L[output/edges.csv];
 
     subgraph "処理フロー"
-        B
-        D
-        E1
-        E2
-        F
-        G
+        B(step1_extract)
+        D(step2a_clean)
+        F(step2b_extract)
+        H1(step3a_relations)
+        H2(step3b_relations)
+        I(step4_normalize)
+        J(step5_export)
     end
 
     subgraph "データ"
-        A
-        C
-        H
-        I
+        A; C; E; G; K; L;
     end
 ```
 
@@ -79,82 +86,66 @@ graph TD;
 
 ## **実装ステップ**
 
-処理は以下の5つのステップに分割し、それぞれを独立したPythonモジュールとして実装します。
-モジュール内で利用する主なライブラリは記載していますが、要件に沿って実装するために必要なライブラリがあれば適宜追加してください。
-requirements.txtに追加ライブラリを記載する場合はライブラリのバージョンを指定し、依存ライブラリも極力記載してください。再現性担保のためにご協力ください。
-それぞれのステップで実行結果をマニュアルで確認しやすいように、jsonやcsvなどのテキスト形式の中間データを保管するようにしてください。
+処理は以下のステップに分割し、それぞれを独立したPythonモジュールとして実装します。
 
 ### **ステップ1: テキスト抽出 (step1_extract.py)**
 
-* **目的:** PDFから全てのテキストをページ単位で抽出します。後のステップで出典を明記できるように、ページ番号と共に保存します。
-* **使用ライブラリ:** PyMuPDF
-* **処理フロー:**
-  1. `input/c00543.pdf` を読み込みます。
-  2. ページごとにテキストを抽出します。
-  3. 抽出したテキストをページ番号と共にJSONオブジェクトのリストとして構成します。
-  4. 中間ファイル `structured_text.json` として一時保存します。
+*   **目的:** PDFから指定されたページ範囲のテキストを抽出します。
+*   **使用ライブラリ:** PyMuPDF
+*   **処理フロー:**
+    1.  `input/c00543.pdf` を読み込みます。
+    2.  指定された範囲のページからテキストを抽出します。（現在は検証のため`12-22`ページに固定）
+    3.  抽出したテキストをページ番号と共に `output/structured_text.json` に保存します。
 
-### **ステップ2: テキストクレンジングとエンティティ（ノード）抽出 (step2_entities.py)**
+### **ステップ2a: テキストクレンジングと段落化 (step2a_clean_text.py)**
 
-* **目的:** 抽出されたテキストから医学的に無関係な情報（参考文献、引用番号、目次など）をLLMを用いて除去し、クリーンなテキストからナレッジグラフのノードとなる医学用語（疾患、症状、薬剤、治療法など）を抽出します。
-* **使用ライブラリ:** google-generativeai, GiNZA (`ja_ginza_electra` モデル)
-* **処理フロー:**
-  1. `structured_text.json` を読み込みます。
-  2. LLM（Gemini）に各ページのテキストを送信し、参考文献、引用番号、目次、著者情報などの不要な情報を除去します。この際、APIのレートリミットを考慮し、バッチ処理と適切なウェイトを設けます。
-  3. クレンジングされたテキストを `output/cleaned_text.json` として一時保存します。
-  4. クレンジングされたテキスト全体にGiNZAの固有表現抽出（NER）を適用します。
-  5. `Disease` (疾患), `Symptom` (症状), `Drug` (薬剤), `Treatment` (治療法) などのラベルが付与されたエンティティを収集します。
-  6. 重複を除いたユニークなエンティティのリストを作成し、ノード候補とします。
-  7. 抽出したエンティティのリストを `output/entities.json` として一時保存します。
+*   **目的:** ページ単位のテキストを連結し、段落に分割します。その後、LLMを用いて各段落から医学的に無関係な情報を除去し、クレンジングされた段落と元の出典ページ番号のペアを作成します。
+*   **使用ライブラリ:** google-generativeai
+*   **処理フロー:**
+    1.  `output/structured_text.json` を読み込み、全テキストを連結します。
+    2.  テキストを段落に分割し、各段落がどのページに由来するかの情報を保持します。
+    3.  段落のリストをバッチ化し、LLMに送信して不要な情報を除去します。
+    4.  クレンジングされた段落と、その出典ページ番号のリストを `output/cleaned_text.json` に保存します。
+        *   **形式:** `[{"paragraph": "...", "source_pages": [12, 13]}, ...]`
 
+### **ステップ2b: LLMによるエンティティ抽出 (step2b_extract_entities.py)**
+
+*   **目的:** クレンジングされた段落から、LLMを用いて医学用語を抽出し、出典ページ番号を紐付けます。
+*   **使用ライブラリ:** google-generativeai
+*   **処理フロー:**
+    1.  `output/cleaned_text.json` を読み込みます。
+    2.  段落をバッチ化し、LLMに送信して`Disease`, `Symptom`, `Drug`, `Treatment`等のエンティティを抽出します。
+    3.  抽出した各エンティティに、そのエンティティが出現した段落の出典ページ番号を紐付けます。
+    4.  重複を除いたユニークなエンティティのリストを `output/entities.json` に保存します。
+        *   **形式:** `[{"term": "...", "category": "...", "source_pages": [12]}, ...]`
 
 ### **ステップ3a: ルールベースのリレーション抽出 (step3a_rule_based_relations.py)**
 
-* **目的:** CQ構造や係り受け解析に基づき、明確なパターンに合致する関係性を抽出します。
-* **使用ライブラリ:** GiNZA (依存構造解析)
-* **処理フロー:**
-  1. `structured_text.json` と、ステップ2で生成されたエンティティリストを読み込みます。
-  2. **前処理:** 本文中の引用番号を除去します。
-  3. 文ごとに、含まれているエンティティのペアをすべてリストアップします。
-  4. **CQ構造に基づくルール:**
-     * 「CQ8: 非歯原性歯痛に有効な薬物療法は何か？」 の回答から、薬剤エンティティを抽出し、(薬剤, is_effective_for, 非歯原性歯痛) という関係を生成します。
-     * 「CQ10: ...抜髄・抜歯は有効か？」 の回答が否定的であれば、(抜髄, is_not_effective_for, 非歯原性歯痛) を生成します。
-  5. **依存構造解析に基づくルール:**
-     * GiNZAで係り受け解析を行い、「AがBを引き起こす」「CはDの原因」といった明確な構文パターンに合致する場合、(A, causes, B) のような関係を抽出します。
-  6. 抽出した関係トリプレットのリストを中間ファイルとして保存します。
+*   **目的:** CQ構造や係り受け解析に基づき、明確なパターンに合致する関係性を抽出します。
+*   **使用ライブラリ:** GiNZA (依存構造解析)
+*   **処理フロー:**
+    1.  `output/cleaned_text.json` と `output/entities.json` を読み込みます。
+    2.  （今後の実装）
 
 ### **ステップ3b: LLMベースのリレーション抽出 (step3b_llm_based_relations.py)**
 
-* **目的:** ルールベースでは捉えきれない、より複雑で多様な関係性をLLM（Gemini）を用いて抽出します。
-* **使用ライブラリ:** google-generativeai
-* **処理フロー:**
-  1. `structured_text.json` と、ステップ2で生成されたエンティティリストを読み込みます。
-  2. **前処理:** 本文中の引用番号を除去します。
-  3. すべてのエンティティペアを対象とします。
-  4. 対象となるエンティティペアと、そのペアが含まれる文（コンテキスト）をセットにします。
-  5. 各セットをインプットとして、後述するプロンプトを用いてGemini APIにリクエストを送信します。
-  6. プロンプト案を`prompt_plan.md`に記載しています。
-  7. APIからのレスポンス（JSON形式）を解析し、(Source, Relation, Target) の関係トリプレットを生成します。
-  8. 抽出した関係トリプレットのリストを中間ファイルとして保存します。
-
+*   **目的:** ルールベースでは捉えきれない、より複雑で多様な関係性をLLMを用いて抽出します。
+*   **使用ライブラリ:** google-generativeai
+*   **処理フロー:**
+    1.  `output/cleaned_text.json` と `output/entities.json` を読み込みます。
+    2.  （今後の実装）
 
 ### **ステップ4: ナレッジの正規化 (step4_normalize.py)**
 
-* **目的:** 抽出したエンティティの表記ゆれ（略語など）を統一します。
-* **使用ライブラリ:** pandas
-* **処理フロー:**
-  1. 既知の同義語・略語辞書を定義します（例: `{'AO': '非定型歯痛', 'PDAP': '持続性歯槽痛'}`）。
-  2. ステップ2で抽出したノードリストとステップ3で抽出したエッジリストを走査し、辞書に基づいてエンティティ名を正規化（統一）します。
+*   **目的:** 抽出したエンティティの表記ゆれ（略語など）を統一します。
+*   **使用ライブラリ:** pandas
+*   **処理フロー:** （今後の実装）
 
 ### **ステップ5: CSVへのエクスポート (step5_export.py)**
 
-* **目的:** 最終的なノードとエッジのリストをCSVファイルとして出力します。
-* **使用ライブラリ:** pandas
-* **処理フロー:**
-  1. 正規化されたノードリストから `output/nodes.csv` を生成します。
-     * カラム: `NodeID` (一意のID), `Label` (エンティティ名), `Category` (カテゴリ)
-  2. 正規化されたエッジリストから `output/edges.csv` を生成します。
-     * カラム: `SourceID` (始点ノードID), `TargetID` (終点ノードID), `Relation` (関係ラベル), `DataSource` (出典元ページなど)
+*   **目的:** 最終的なノードとエッジのリストをCSVファイルとして出力します。
+*   **使用ライブラリ:** pandas
+*   **処理フロー:** （今後の実装）
 
 ## **前提条件**
 
@@ -163,28 +154,53 @@ requirements.txtに追加ライブラリを記載する場合はライブラリ�
 
 ## **実行手順**
 
-以下のコマンドをターミナルで実行します。
-
 1.  **Gemini APIキーの設定:**
-    プロジェクトのルートディレクトリに `.env` ファイルを作成し、以下の形式でAPIキーを記述します。
-    ```
-    GEMINI_API_KEY=YOUR_API_KEY_HERE
-    ```
-    `YOUR_API_KEY_HERE` を実際のAPIキーに置き換えてください。
+    プロジェクトのルートディレクトリに `.env` ファイルを作成し、APIキーを記述します。
 
 2.  **Dockerイメージのビルド:**
-    プロジェクトのルートディレクトリをコンテキストとして、コンテナイメージを構築します。
     ```bash
     docker build -t knowledge-graph-builder .
     ```
 
 3.  **Dockerコンテナの実行:**
-    ビルドしたイメージを実行します。`-v` オプションでローカルの `output` ディレクトリをコンテナ内の `output` ディリクトリにマウントし、`--env-file .env` オプションでAPIキーをコンテナに渡します。これにより、生成されたファイルをローカルで確認できるようになります。
-    ```bash
-    docker run --rm -v "$(pwd)/output":/app/output --env-file .env knowledge-graph-builder
-    ```
+    *   **全ステップを実行:**
+        ```bash
+        docker run --rm -v "$(pwd)/output":/app/output --env-file .env knowledge-graph-builder
+        ```
+    *   **特定のステップから実行:**
+        `--start-step`引数で開始ステップを指定できます。（例: `step2b`から開始）
+        ```bash
+        docker run --rm -v "$(pwd)/output":/app/output --env-file .env knowledge-graph-builder python src/main.py --start-step step2b
+        ```
 
-    実行が完了すると、ローカルの `output` ディレクトリに `nodes.csv` と `edges.csv` が生成されます。
+    実行が完了すると、ローカルの `output` ディレクトリに中間ファイルや最終的なCSVが生成されます。
+
+## **（参考）生成される中間ファイルの形式**
+
+**output/cleaned_text.json**
+```json
+[
+  {
+    "paragraph": "クレンジングされた段落1...",
+    "source_pages": [12]
+  },
+  {
+    "paragraph": "クレンジングされた段落2...",
+    "source_pages": [12, 13]
+  }
+]
+```
+
+**output/entities.json**
+```json
+[
+  {
+    "term": "非歯原性歯痛",
+    "category": "Disease",
+    "source_pages": [12, 13]
+  }
+]
+```
 
 ## **生成されるCSVの例**
 
