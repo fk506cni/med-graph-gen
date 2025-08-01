@@ -146,7 +146,7 @@ graph TD;
         以下のコマンドは、パイプライン全体を実行します。`-v`フラグは、ホストマシン（現在いる場所）のファイルをコンテナ内の作業ディレクトリに同期させるために使用します。これにより、コンテナは常に最新のコードとプロンプトで動作し、生成されたファイルはホストの`output`ディレクトリで直接確認できます。
 
         ```bash
-docker run --rm --env-file .env \
+        docker run --rm --env-file .env \
           -v "$(pwd)/output:/app/output" \
           -v "$(pwd)/paragraph_cleaning_prompt.md:/app/paragraph_cleaning_prompt.md" \
           -v "$(pwd)/entity_extraction_prompt.md:/app/entity_extraction_prompt.md" \
