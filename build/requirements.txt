@@ -1,0 +1,10 @@
+# PDF操作
+PyMuPDF
+
+# 自然言語処理 (NLP)
+spacy==3.7.2
+ginza==5.1.2
+ja-ginza-electra==5.1.2 # GiNZAのモデル
+
+# データ操作
+pandas
