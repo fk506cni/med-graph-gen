@@ -52,14 +52,9 @@ graph TD;
     E --> F(step2b_extract_entities.py);
     F --> G[output/entities.json];
 
-    E --> H1(step3a_rule_based_relations.py);
-    G --> H1;
-    E --> H2(step3b_llm_based_relations.py);
-    G --> H2;
+    G --> H2(step3b_llm_based_relations.py);
 
-    G --> I(step4_normalize.py);
-    H1 --> I;
-    H2 --> I;
+    H2 --> I(step4_normalize.py);
 
     I --> J(step5_export.py);
     J --> K[output/nodes.csv];
@@ -69,7 +64,6 @@ graph TD;
         B(step1_extract)
         D(step2a_clean)
         F(step2b_extract)
-        H1(step3a_relations)
         H2(step3b_relations)
         I(step4_normalize)
         J(step5_export)
@@ -119,22 +113,17 @@ graph TD;
     4.  重複を除いたユニークなエンティティのリストを `output/entities.json` に保存します。
         *   **形式:** `[{"term": "...", "category": "...", "source_pages": [12]}, ...]`
 
-### **ステップ3a: ルールベースのリレーション抽出 (step3a_rule_based_relations.py)**
-
-*   **目的:** CQ構造や係り受け解析に基づき、明確なパターンに合致する関係性を抽出します。
-*   **使用ライブラリ:** GiNZA (依存構造解析)
-*   **処理フロー:**
-    1.  `output/cleaned_text.json` と `output/entities.json` を読み込みます。
-    2.  基本的な骨格が実装され、GiNZAを用いた係り受け解析の準備ができています。
-    3.  現時点では、空の`output/relations.json`を生成します。
-
 ### **ステップ3b: LLMベースのリレーション抽出 (step3b_llm_based_relations.py)**
 
 *   **目的:** ルールベースでは捉えきれない、より複雑で多様な関係性をLLMを用いて抽出します。
 *   **使用ライブラリ:** google-generativeai
 *   **処理フロー:**
     1.  `output/cleaned_text.json` と `output/entities.json` を読み込みます。
-    2.  （今後の実装）
+    2.  段落内のエンティティペアを抽出し、`ENTITY_PAIR_BATCH_SIZE`で指定された数ごとにバッチ化します。
+    3.  各バッチをLLMに送信し、エンティティ間の関係を抽出します。
+    4.  抽出された関係は、`output/relations.jsonl`に逐次書き込まれます。
+        *   **形式:** `{"source": "...", "target": "...", "relation": "...", "reason": "...", "source_pages": [...]}` (JSON Lines形式)
+    5.  APIレート制限を考慮し、`DELAY_SECONDS`で指定された秒数だけ待機します。
 
 ### **ステップ4: ナレッジの正規化 (step4_normalize.py)**
 
@@ -169,9 +158,12 @@ graph TD;
         docker run --rm -v /mnt/d/local_envs/med-graph-gen/output:/app/output --env-file .env knowledge-graph-builder
         ```
     *   **特定のステップから実行:**
-        `--start-step`引数で開始ステップを指定できます。（例: `step2b`から開始）
+        `--start-step`引数で開始ステップを指定できます。（例: `step3b`から開始）
+        `relation_extraction_batch_prompt.md`をマウントし、`python -u`で非バッファモードで実行します。
         ```bash
-        docker run --rm -v /mnt/d/local_envs/med-graph-gen/output:/app/output --env-file .env knowledge-graph-builder python src/main.py --start-step step2b
+        docker run --rm -v /mnt/d/local_envs/med-graph-gen/output:/app/output \
+          -v /mnt/d/local_envs/med-graph-gen/relation_extraction_batch_prompt.md:/app/relation_extraction_batch_prompt.md \
+          --env-file .env knowledge-graph-builder python -u src/main.py --start-step step3b
         ```
 
     実行が完了すると、ローカルの `output` ディレクトリに中間ファイルや最終的なCSVが生成されます。
@@ -203,9 +195,10 @@ graph TD;
 ]
 ```
 
-**output/relations.json**
-```json
-[]
+**output/relations.jsonl**
+```jsonl
+{"source": "エンティティA", "target": "エンティティB", "relation": "関係タイプ", "reason": "理由", "source_pages": [12]}
+{"source": "エンティティC", "target": "エンティティD", "relation": "関係タイプ", "reason": "理由", "source_pages": [13]}
 ```
 
 ## **生成されるCSVの例**

@@ -1,4 +1,4 @@
-## Project Status: Step 1 & 2 Implemented with Enhancements
+## Project Status: Step 1, 2, & 3b Implemented with Enhancements
 
 **Objective:** Develop a system to generate a knowledge graph CSV from a PDF document.
 
@@ -29,9 +29,11 @@
 
 ### Recent Updates (August 1, 2025)
 
-*   **Step 3a (Rule-based Relation Extraction) の骨格実装:**
-    *   `src/step3a_rule_based_relations.py` に基本的な処理フロー（ファイルの読み込み、GiNZAのロード、空の `relations.json` の出力）を実装しました。
-    *   `main.py` から `--start-step step3a` で実行可能です。
+*   **Step 3b (LLM-based Relation Extraction) の実装:**
+    *   `src/step3b_llm_based_relations.py` にLLMを用いた関係抽出ロジックを実装しました。
+    *   APIレート制限を考慮し、エンティティペアを小バッチに分割してLLMに送信し、各バッチの処理後に遅延を設けるようにしました。
+    *   抽出された関係は、`output/relations.jsonl` にJSON Lines形式で逐次書き込まれます。
+    *   `main.py` から `--start-step step3b` で実行可能です。
 *   **GiNZAモデルのロード問題の解決:**
     *   `Dockerfile` および `requirements.txt` を修正し、`spacy.load("ja_core_news_lg")` でGiNZAモデルが正しくロードされるようにしました。
     *   `numpy` のバージョン互換性問題を解決するため、`requirements.txt` に `numpy<2.0` を追加しました。
@@ -40,4 +42,4 @@
 
 ### Next Steps
 
-*   Proceed with the implementation of `src/step3a_rule_based_relations.py` as defined in the updated `README.md`.
+*   Proceed with the implementation of `src/step4_normalize.py`.
