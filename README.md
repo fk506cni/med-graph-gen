@@ -8,7 +8,7 @@
 
 ## **概要**
 
-本プロジェクトは、提供されたPDFファイル『非歯原性歯痛の診療ガイドライン』から、医学用語の関連性（原因、症状、治療法など）を構造化したナレッジグラフを構築するためのCSVファイルを、人手による注釈なしで自動生成するシステムの実装計画を定義します。
+本プロジェクトは、提供されたPDFファイルから、医学用語の関連性（原因、症状、治療法など）を構造化したナレッジグラフを構築するためのCSVファイルを、人手による注釈なしで自動生成するシステムです。
 
 ローカルでの実行環境はDockerコンテナ上に構築し、環境差異による影響を排除し、再現性を担保します。
 
@@ -19,14 +19,16 @@
 ```
 med-graph-gen/
 │
-├── build/                  # Dockerビルド関連のファイルを格納
-│   ├── Dockerfile
-│   └── requirements.txt
+├── Dockerfile
+├── .env.example            # APIキー設定用のサンプルファイル
+├── entity_normalization_prompt.md
+├── relation_extraction_batch_prompt.md
+├── ... (その他プロンプトファイル)
 │
 ├── input/
 │   └── c00543.pdf          # 入力となるPDFファイル
 │
-├── output/                 # 生成されたCSVファイルが格納される
+├── output/                 # 生成された中間ファイルやCSVが格納される
 │   ├── nodes.csv
 │   └── edges.csv
 │
@@ -35,7 +37,6 @@ med-graph-gen/
     ├── step1_extract.py
     ├── step2a_clean_text.py
     ├── step2b_extract_entities.py
-    ├── step3a_rule_based_relations.py
     ├── step3b_llm_based_relations.py
     ├── step4_normalize.py
     └── step5_export.py
@@ -51,91 +52,69 @@ graph TD;
     D --> E[output/cleaned_text.json];
     E --> F(step2b_extract_entities.py);
     F --> G[output/entities.json];
+    G --> H(step3b_llm_based_relations.py);
+    H --> I[output/relations.jsonl];
 
-    G --> H2(step3b_llm_based_relations.py);
+    G --> J(step4_normalize.py);
+    I --> J;
 
-    H2 --> I(step4_normalize.py);
+    J --> K[output/normalized_entities.json];
+    J --> L[output/normalized_relations.jsonl];
 
-    I --> J(step5_export.py);
-    J --> K[output/nodes.csv];
-    J --> L[output/edges.csv];
+    K --> M(step5_export.py);
+    L --> M;
+
+    M --> N[output/nodes.csv];
+    M --> O[output/edges.csv];
 
     subgraph "処理フロー"
         B(step1_extract)
         D(step2a_clean)
         F(step2b_extract)
-        H2(step3b_relations)
-        I(step4_normalize)
-        J(step5_export)
+        H(step3b_relations)
+        J(step4_normalize)
+        M(step5_export)
     end
 
     subgraph "データ"
-        A; C; E; G; K; L;
+        A; C; E; G; I; K; L; N; O;
     end
 ```
 
-## **開発環境**
-
-コンテナの構成は `build/Dockerfile` と `build/requirements.txt` を参照してください。
-
 ## **実装ステップ**
 
-処理は以下のステップに分割し、それぞれを独立したPythonモジュールとして実装します。
-
 ### **ステップ1: テキスト抽出 (step1_extract.py)**
-
 *   **目的:** PDFから指定されたページ範囲のテキストを抽出します。
-*   **使用ライブラリ:** PyMuPDF
-*   **処理フロー:**
-    1.  `input/c00543.pdf` を読み込みます。
-    2.  指定された範囲のページからテキストを抽出します。（現在は検証のため`12-22`ページに固定）
-    3.  抽出したテキストをページ番号と共に `output/structured_text.json` に保存します。
+*   **出力:** `output/structured_text.json`
 
 ### **ステップ2a: テキストクレンジングと段落化 (step2a_clean_text.py)**
-
-*   **目的:** ページ単位のテキストを連結し、段落に分割します。その後、LLMを用いて各段落から医学的に無関係な情報を除去し、クレンジングされた段落と元の出典ページ番号のペアを作成します。
-*   **使用ライブラリ:** google-generativeai
-*   **処理フロー:**
-    1.  `output/structured_text.json` を読み込み、全テキストを連結します。
-    2.  テキストを段落に分割し、各段落がどのページに由来するかの情報を保持します。
-    3.  段落のリストをバッチ化し、LLMに送信して不要な情報を除去します。
-    4.  クレンジングされた段落と、その出典ページ番号のリストを `output/cleaned_text.json` に保存します。
-        *   **形式:** `[{"paragraph": "...", "source_pages": [12, 13]}, ...]`
+*   **目的:** LLMを用いて、抽出したテキストからヘッダーやフッターなどの不要な情報を取り除き、内容を段落単位に分割します。
+*   **出力:** `output/cleaned_text.json`
 
 ### **ステップ2b: LLMによるエンティティ抽出 (step2b_extract_entities.py)**
-
-*   **目的:** クレンジングされた段落から、LLMを用いて医学用語を抽出し、出典ページ番号を紐付けます。
-*   **使用ライブラリ:** google-generativeai
-*   **処理フロー:**
-    1.  `output/cleaned_text.json` を読み込みます。
-    2.  段落をバッチ化し、LLMに送信して`Disease`, `Symptom`, `Drug`, `Treatment`等のエンティティを抽出します。
-    3.  抽出した各エンティティに、そのエンティティが出現した段落の出典ページ番号を紐付けます。
-    4.  重複を除いたユニークなエンティティのリストを `output/entities.json` に保存します。
-        *   **形式:** `[{"term": "...", "category": "...", "source_pages": [12]}, ...]`
+*   **目的:** クレンジングされた段落から、LLMを用いて医学用語（エンティティ）を抽出します。
+*   **出力:** `output/entities.json`
 
 ### **ステップ3b: LLMベースのリレーション抽出 (step3b_llm_based_relations.py)**
-
-*   **目的:** ルールベースでは捉えきれない、より複雑で多様な関係性をLLMを用いて抽出します。
-*   **使用ライブラリ:** google-generativeai
-*   **処理フロー:**
-    1.  `output/cleaned_text.json` と `output/entities.json` を読み込みます。
-    2.  段落内のエンティティペアを抽出し、`ENTITY_PAIR_BATCH_SIZE`で指定された数ごとにバッチ化します。
-    3.  各バッチをLLMに送信し、エンティティ間の関係を抽出します。
-    4.  抽出された関係は、`output/relations.jsonl`に逐次書き込まれます。
-        *   **形式:** `{"source": "...", "target": "...", "relation": "...", "reason": "...", "source_pages": [...]}` (JSON Lines形式)
-    5.  APIレート制限を考慮し、`DELAY_SECONDS`で指定された秒数だけ待機します。
+*   **目的:** 段落内のエンティティのペアに基づき、LLMを用いてそれらの関係性を抽出します。
+*   **出力:** `output/relations.jsonl`
 
 ### **ステップ4: ナレッジの正規化 (step4_normalize.py)**
-
-*   **目的:** 抽出したエンティティの表記ゆれ（略語など）を統一します。
-*   **使用ライブラリ:** pandas
-*   **処理フロー:** （今後の実装）
+*   **目的:** 抽出したエンティティの表記ゆれ（例: `非歯原性歯痛`と`NTDP`）を統一します。
+*   **処理フロー:**
+    1.  `output/entities.json` を読み込み、エンティティのリストをバッチに分割します。
+    2.  各バッチをLLMに送信し、正規化名の候補を取得します。
+    3.  全バッチの候補を集計し、最も頻度の高いものを「代表名」として決定する多数決ロジックにより、最終的な正規化マッピングを作成します。
+    4.  このマッピングを用いて、エンティティとリレーションの表記を統一します。
+*   **出力:** `output/normalized_entities.json`, `output/normalized_relations.jsonl`, `output/normalization_map.json`
 
 ### **ステップ5: CSVへのエクスポート (step5_export.py)**
-
-*   **目的:** 最終的なノードとエッジのリストをCSVファイルとして出力します。
-*   **使用ライブラリ:** pandas
-*   **処理フロー:** （今後の実装）
+*   **目的:** 正規化されたエンティティとリレーションを、グラフデータベースで扱いやすいCSV形式に変換します。
+*   **処理フロー:**
+    1.  正規化済みのエンティティとリレーションのファイルを読み込みます。
+    2.  各エンティティにユニークなID（例: `DISEASE_001`）を付与し、`nodes.csv` を生成します。
+    3.  リレーション情報内のエンティティ名を対応するIDに置換し、`edges.csv` を生成します。
+*   **出力:** `output/nodes.csv`, `output/edges.csv`
 
 ## **前提条件**
 
@@ -145,7 +124,10 @@ graph TD;
 ## **実行手順**
 
 1.  **Gemini APIキーの設定:**
-    プロジェクトのルートディレクトリに `.env` ファイルを作成し、APIキーを記述します。
+    プロジェクトのルートディレクトリに `.env` ファイルを作成し、お持ちのAPIキーを記述します。
+    ```
+    GEMINI_API_KEY="<YOUR_API_KEY>"
+    ```
 
 2.  **Dockerイメージのビルド:**
     ```bash
@@ -154,52 +136,28 @@ graph TD;
 
 3.  **Dockerコンテナの実行:**
     *   **全ステップを実行:**
+        以下のコマンドは、`output`ディレクトリと、LLMへの指示に必要な全てのプロンプトファイルをコンテナにマウントし、パイプライン全体を実行します。
         ```bash
-        docker run --rm -v /mnt/d/local_envs/med-graph-gen/output:/app/output --env-file .env knowledge-graph-builder
+        docker run --rm --env-file .env \
+          -v "$(pwd)/output:/app/output" \
+          -v "$(pwd)/paragraph_cleaning_prompt.md:/app/paragraph_cleaning_prompt.md" \
+          -v "$(pwd)/entity_extraction_prompt.md:/app/entity_extraction_prompt.md" \
+          -v "$(pwd)/relation_extraction_batch_prompt.md:/app/relation_extraction_batch_prompt.md" \
+          -v "$(pwd)/entity_normalization_prompt.md:/app/entity_normalization_prompt.md" \
+          knowledge-graph-builder python -u src/main.py
         ```
+
     *   **特定のステップから実行:**
-        `--start-step`引数で開始ステップを指定できます。（例: `step3b`から開始）
-        `relation_extraction_batch_prompt.md`をマウントし、`python -u`で非バッファモードで実行します。
+        `--start-step`引数で開始ステップを指定できます。（例: `step5`から開始）
         ```bash
-        docker run --rm -v /mnt/d/local_envs/med-graph-gen/output:/app/output \
-          -v /mnt/d/local_envs/med-graph-gen/relation_extraction_batch_prompt.md:/app/relation_extraction_batch_prompt.md \
-          --env-file .env knowledge-graph-builder python -u src/main.py --start-step step3b
+        docker run --rm --env-file .env \
+          -v "$(pwd)/output:/app/output" \
+          -v "$(pwd)/entity_normalization_prompt.md:/app/entity_normalization_prompt.md" \
+          knowledge-graph-builder python -u src/main.py --start-step step5
         ```
+        *注意: 開始するステップによっては、依存するプロンプトファイルのマウントが別途必要になる場合があります。*
 
     実行が完了すると、ローカルの `output` ディレクトリに中間ファイルや最終的なCSVが生成されます。
-
-## **（参考）生成される中間ファイルの形式**
-
-**output/cleaned_text.json**
-```json
-[
-  {
-    "paragraph": "クレンジングされた段落1...",
-    "source_pages": [12]
-  },
-  {
-    "paragraph": "クレンジングされた段落2...",
-    "source_pages": [12, 13]
-  }
-]
-```
-
-**output/entities.json**
-```json
-[
-  {
-    "term": "非歯原性歯痛",
-    "category": "Disease",
-    "source_pages": [12, 13]
-  }
-]
-```
-
-**output/relations.jsonl**
-```jsonl
-{"source": "エンティティA", "target": "エンティティB", "relation": "関係タイプ", "reason": "理由", "source_pages": [12]}
-{"source": "エンティティC", "target": "エンティティD", "relation": "関係タイプ", "reason": "理由", "source_pages": [13]}
-```
 
 ## **生成されるCSVの例**
 

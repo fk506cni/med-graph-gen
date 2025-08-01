@@ -4,8 +4,8 @@ import step2a_clean_text
 import step2b_extract_entities
 # import step3a_rule_based_relations
 import step3b_llm_based_relations
-# import step4_normalize
-# import step5_export
+import step4_normalize
+import step5_export
 
 def main():
     parser = argparse.ArgumentParser(description="ナレッジグラフ生成パイプライン")
@@ -25,8 +25,8 @@ def main():
         'step2b': step2b_extract_entities.main,
         # 'step3a': step3a_rule_based_relations.main,
         'step3b': step3b_llm_based_relations.main,
-        # 'step4': step4_normalize.main,
-        # 'step5': step5_export.main,
+        'step4': step4_normalize.main,
+        'step5': step5_export.main,
     }
 
     # 実行するステップのリストを定義
