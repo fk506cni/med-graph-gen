@@ -78,12 +78,19 @@ graph TD;
     M --> Q[output/step5_normalization_nodes.csv];
     M --> R[output/step5_normalization_edges.csv];
 
+    N --> S(step6_import_to_neo4j.py);
+    O --> S;
+    Q --> S;
+    R --> S;
+
+    S --> T((Neo4j Aura DB));
+
     subgraph "処理フロー"
-        B; D; F; H; J; M;
+        B; D; F; H; J; M; S;
     end
 
     subgraph "データ"
-        A; C; E; G; I; K; L; P; N; O; Q; R;
+        A; C; E; G; I; K; L; P; N; O; Q; R; T;
     end
 ```
 
@@ -110,7 +117,60 @@ graph TD;
 *   **出力:** `output/step4_normalized_entities.json`, `output/step4_normalized_relations.jsonl`, `output/step4_normalization_map.json`
 
 ### **ステップ5: CSVへのエクスポート (step5_export.py)**
-*   **目的:** 正規化されたエンティティとリレーションを、グラフデータベースで扱いやすいCSV形式に変換します。また、正規化の対応関係そのものもグラフとしてCSV出力します。
+*   **目的:** 正規化されたエンティティとリレーションを、グラフデータベースで扱いやすいCSV形式に変換します。この際、リレーション名を`skos`や`biolink`などの標準的なオントロジー語彙にマッピングし、データの相互運用性を高めます。また、正規化の対応関係そのものもグラフとしてCSV出力します。
+*   **出力:** 
+    *   `output/step5_nodes.csv`, `output/step5_edges.csv` (ナレッジグラフ)
+    *   `output/step5_normalization_nodes.csv`, `output/step5_normalization_edges.csv` (正規化関係グラフ)
+
+### **ステップ6: Neo4jへのインポート (step6_import_to_neo4j.py)**
+*   **目的:** ステップ5で生成された4つのCSVファイルをNeo4j Aura DBにインポートし、グラフを構築します。
+*   **入力:** `output/step5_*.csv`
+*   **処理:** 環境変数で指定された接続情報に基づき、Neo4jデータベースに接続し、CSVデータを元にノードとリレーションを作成します。
+
+## **前提条件**
+
+*   [Docker](https://www.docker.com/) がインストールされていること。
+*   Gemini APIキーが取得済みであること。
+*   Neo4j Aura DBのアカウントが準備済みで、接続情報（URI, ユーザー名, パスワード）が取得済みであること。
+
+## **実行手順**
+
+1.  **環境変数の設定:**
+    プロジェクトのルートディレクトリに `.env` ファイルを作成し、各種キー情報を記述します。
+    ```
+    GEMINI_API_KEY="<YOUR_API_KEY>"
+    NEO4J_URI="<YOUR_NEO4J_AURA_URI>"
+    NEO4J_USER="<YOUR_NEO4J_USER>"
+    NEO4J_PASSWORD="<YOUR_NEO4J_PASSWORD>"
+    ```
+
+2.  **Dockerイメージのビルド:**
+```
+
+## **実装ステップ**
+
+### **ステップ1: テキスト抽出 (step1_extract.py)**
+*   **目的:** PDFから指定されたページ範囲のテキストを抽出します。`--start_page`と`--end_page`引数で範囲を指定できます。
+*   **出力:** `output/step1_structured_text.json`
+
+### **ステップ2a: テキストクレンジングと段落化 (step2a_clean_text.py)**
+*   **目的:** LLMを用いて、抽出したテキストから不要な情報を取り除き、段落単位に分割します。APIレート制限対策として`--wait`引数で待機時間を指定できます。
+*   **出力:** `output/step2a_cleaned_text.json`
+
+### **ステップ2b: LLMによるエンティティ抽出 (step2b_extract_entities.py)**
+*   **目的:** クレンジングされた段落から、LLMを用いて医学用語（エンティティ）を抽出します。
+*   **出力:** `output/step2b_entities.json`
+
+### **ステップ3b: LLMベースのリレーション抽出 (step3b_llm_based_relations.py)**
+*   **目的:** 段落内のエンティティのペアに基づき、LLMを用いてそれらの関係性を抽出します。
+*   **出力:** `output/step3b_relations.jsonl`
+
+### **ステップ4: ナレッジの正規化 (step4_normalize.py)**
+*   **目的:** 抽出したエンティティの表記ゆれ（例: `非歯原性歯痛`と`NTDP`）を統一します。
+*   **出力:** `output/step4_normalized_entities.json`, `output/step4_normalized_relations.jsonl`, `output/step4_normalization_map.json`
+
+### **ステップ5: CSVへのエクスポート (step5_export.py)**
+*   **目的:** 正規化されたエンティティとリレーションを、グラフデータベースで扱いやすいCSV形式に変換します。この際、リレーション名を`skos`や`biolink`などの標準的なオントロジー語彙にマッピングし、データの相互運用性を高めます。また、正規化の対応関係そのものもグラフとしてCSV出力します。
 *   **出力:** 
     *   `output/step5_nodes.csv`, `output/step5_edges.csv` (ナレッジグラフ)
     *   `output/step5_normalization_nodes.csv`, `output/step5_normalization_edges.csv` (正規化関係グラフ)
@@ -134,36 +194,36 @@ graph TD;
     ```
 
 3.  **Dockerコンテナの実行:**
-    *   **全ステップを実行 (基本):**
+    *   **全ステップを実行 (推奨):**
         ```bash
         docker run --rm --env-file .env \
-          -v "/path/to/your/med-graph-gen/output:/app/output" \
-          -v "/path/to/your/med-graph-gen/paragraph_cleaning_prompt.md:/app/paragraph_cleaning_prompt.md" \
-          -v "/path/to/your/med-graph-gen/entity_extraction_prompt.md:/app/entity_extraction_prompt.md" \
-          -v "/path/to/your/med-graph-gen/relation_extraction_batch_prompt.md:/app/relation_extraction_batch_prompt.md" \
-          -v "/path/to/your/med-graph-gen/entity_normalization_prompt.md:/app/entity_normalization_prompt.md" \
+          -v "$(pwd)/output:/app/output" \
+          -v "$(pwd)/paragraph_cleaning_prompt.md:/app/paragraph_cleaning_prompt.md" \
+          -v "$(pwd)/entity_extraction_prompt.md:/app/entity_extraction_prompt.md" \
+          -v "$(pwd)/relation_extraction_batch_prompt.md:/app/relation_extraction_batch_prompt.md" \
+          -v "$(pwd)/entity_normalization_prompt.md:/app/entity_normalization_prompt.md" \
           knowledge-graph-builder python -u src/main.py
         ```
-        *注意: `/path/to/your/med-graph-gen` の部分は、お使いの環境の `med-graph-gen` プロジェクトへの絶対パスに置き換えてください。*
+        *注意: `$(pwd)` は現在のディレクトリの絶対パスに展開されます。お使いのシェル環境によっては、`/path/to/your/med-graph-gen` のように手動で絶対パスを指定する必要がある場合があります.*
 
     *   **ページ範囲と待機時間を指定して実行:**
         `--start_page`, `--end_page`, `--wait` 引数で、処理対象のページ範囲とAPI呼び出し間の待機時間（秒）を制御できます。
         ```bash
         docker run --rm --env-file .env \
-          -v "/path/to/your/med-graph-gen/output:/app/output" \
-          -v "/path/to/your/med-graph-gen/paragraph_cleaning_prompt.md:/app/paragraph_cleaning_prompt.md" \
-          -v "/path/to/your/med-graph-gen/entity_extraction_prompt.md:/app/entity_extraction_prompt.md" \
-          -v "/path/to/your/med-graph-gen/relation_extraction_batch_prompt.md:/app/relation_extraction_batch_prompt.md" \
-          -v "/path/to/your/med-graph-gen/entity_normalization_prompt.md:/app/entity_normalization_prompt.md" \
+          -v "$(pwd)/output:/app/output" \
+          -v "$(pwd)/paragraph_cleaning_prompt.md:/app/paragraph_cleaning_prompt.md" \
+          -v "$(pwd)/entity_extraction_prompt.md:/app/entity_extraction_prompt.md" \
+          -v "$(pwd)/relation_extraction_batch_prompt.md:/app/relation_extraction_batch_prompt.md" \
+          -v "$(pwd)/entity_normalization_prompt.md:/app/entity_normalization_prompt.md" \
           knowledge-graph-builder python -u src/main.py --start_page 12 --end_page 17 --wait 5
         ```
 
-    *   **特定のステップから実行:**
-        `--start-step`引数で開始ステップを指定できます。例えば、`step5`から実行する場合、`output`ディレクトリに依存ファイルが存在している必要があります。
+    *   **特定のステップから実行 (デバッグ用):**
+        `--start-step`引数で開始ステップを指定できます。例えば、`step6`から実行する場合、`output`ディレクトリに`step5`で生成されるCSVファイル群が事前に存在している必要があります。
         ```bash
         docker run --rm --env-file .env \
-          -v "/path/to/your/med-graph-gen/output:/app/output" \
-          knowledge-graph-builder python -u src/main.py --start-step step5
+          -v "$(pwd)/output:/app/output" \
+          knowledge-graph-builder python -u src/main.py --start-step step6
         ```
 
 ## **生成されるCSVの例**
@@ -180,7 +240,7 @@ DISEASE_001,非歯原性歯痛,疾患
 
 ```csv
 SourceID,TargetID,Relation,DataSource
-DISEASE_001,DISEASE_002,has_underlying_disease,c00543.pdf_p12
+DISEASE_001,DISEASE_002,biolink:is_symptom_of,c00543.pdf_p12
 ...
 ```
 
@@ -197,6 +257,6 @@ TERM_0002,NTDP
 
 ```csv
 SourceID,TargetID,Relation
-TERM_0002,TERM_0001,is_normalized_to
+TERM_0002,TERM_0001,skos:exactMatch
 ...
 ```

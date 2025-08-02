@@ -27,6 +27,7 @@
 
 ### Debugging and Stabilization
 
+*   Resolved a `KeyError` in `step6` during CSV import. The issue was caused by a Byte Order Mark (BOM) at the beginning of the CSV files, which was prepended to the first column's header. The fix involved changing the file encoding to `utf-8-sig` in `step6_import_to_neo4j.py` and adding logic to strip the BOM character from the header keys, ensuring correct column name recognition.
 *   Resolved a `KeyError` in `step4` by escaping curly braces in the prompt template.
 *   Fixed a `NameError` in `step5` by correcting the import scope of the `defaultdict` collection.
 *   Addressed `list index out of range` error in `step2a` by implementing safer indexing.
@@ -34,12 +35,13 @@
 
 ### Current State
 
-*   The full pipeline from PDF to CSV is complete and functional.
-*   The system can successfully extract, cleanse, relate, normalize, and export knowledge from the sample PDF.
+*   The full pipeline from PDF to Neo4j is complete and functional.
+*   The system can successfully extract, cleanse, relate, normalize, export, and import knowledge from the sample PDF into a graph database.
 *   The project is well-documented in the `README.md`, including setup and execution instructions.
 
 ### Recent Updates (August 2, 2025)
 
+*   **Implemented Neo4j Import (Step 6):** Added a new pipeline step (`step6_import_to_neo4j.py`) to automatically import the generated knowledge graph CSVs into a Neo4j Aura database. This includes adding the `neo4j` dependency and updating the main pipeline script.
 *   **Added CLI Arguments:** Implemented `--wait`, `--start_page`, and `--end_page` arguments for better control over the pipeline execution.
 *   **Enhanced Step 5:** Added functionality to export the normalization map as a separate graph.
 *   **Documentation:** Updated `README.md` and `GEMINI.md` to reflect the latest changes, including new features and updated, more robust execution commands.

@@ -6,6 +6,7 @@ import step2b_extract_entities
 import step3b_llm_based_relations
 import step4_normalize
 import step5_export
+import step6_import_to_neo4j
 
 def main():
     parser = argparse.ArgumentParser(description="ナレッジグラフ生成パイプライン")
@@ -13,13 +14,13 @@ def main():
         '--start-step',
         type=str,
         default='step1',
-        choices=['step1', 'step2a', 'step2b', 'step3b', 'step4', 'step5'],
+        choices=['step1', 'step2a', 'step2b', 'step3b', 'step4', 'step5', 'step6'],
         help='パイプラインを開始するステップを指定します'
     )
     parser.add_argument(
         '--model',
         type=str,
-        default='gemini-2.5-flash-lite',
+        default='gemini-1.5-flash-latest',
         help='使用するLLMモデルを指定します'
     )
     parser.add_argument(
@@ -54,10 +55,11 @@ def main():
         'step3b': step3b_llm_based_relations.main,
         'step4': step4_normalize.main,
         'step5': step5_export.main,
+        'step6': step6_import_to_neo4j.main,
     }
 
     # 実行するステップのリストを定義
-    step_order = ['step1', 'step2a', 'step2b', 'step3b', 'step4', 'step5']
+    step_order = ['step1', 'step2a', 'step2b', 'step3b', 'step4', 'step5', 'step6']
 
     # 指定された開始ステップから処理を開始
     start_index = step_order.index(args.start_step)
@@ -84,3 +86,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
