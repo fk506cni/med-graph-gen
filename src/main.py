@@ -22,6 +22,24 @@ def main():
         default='gemini-2.5-flash-lite',
         help='使用するLLMモデルを指定します'
     )
+    parser.add_argument(
+        '--wait',
+        type=int,
+        default=60,
+        help='APIレート制限のための待機時間（秒）'
+    )
+    parser.add_argument(
+        '--start_page',
+        type=int,
+        default=None,
+        help='処理を開始するページ番号'
+    )
+    parser.add_argument(
+        '--end_page',
+        type=int,
+        default=None,
+        help='処理を終了するページ番号'
+    )
     args = parser.parse_args()
 
     # LLMを必要とするステップのリスト
@@ -48,12 +66,18 @@ def main():
         current_step = step_order[i]
         if current_step in steps:
             print(f"\n--- ステップ: {current_step} を開始します ---")
-            # LLMを使用するステップにはモデル名を渡す
-            if current_step in llm_steps:
+            
+            kwargs = {}
+            if current_step == 'step1':
+                kwargs['start_page'] = args.start_page
+                kwargs['end_page'] = args.end_page
+            elif current_step in llm_steps:
+                kwargs['model_name'] = args.model
+                kwargs['wait'] = args.wait
                 print(f"使用モデル: {args.model}")
-                steps[current_step](model_name=args.model)
-            else:
-                steps[current_step]()
+                print(f"待機時間: {args.wait}秒")
+
+            steps[current_step](**kwargs)
             print(f"--- ステップ: {current_step} が完了しました ---")
         else:
             print(f"\n--- ステップ: {current_step} は未実装のためスキップします ---")

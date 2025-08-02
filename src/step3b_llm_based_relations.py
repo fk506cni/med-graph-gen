@@ -6,7 +6,6 @@ from string import Template
 import google.generativeai as genai
 
 # --- 定数 ---
-DELAY_SECONDS = 15 # API呼び出しごとの待機時間（レート制限対策で延長）
 ENTITY_PAIR_BATCH_SIZE = 50 # 1回のLLM呼び出しで処理するエンティティペアの数
 INPUT_CLEANED_TEXT_PATH = "output/step2a_cleaned_text.json"
 INPUT_ENTITIES_PATH = "output/step2b_entities.json"
@@ -14,7 +13,6 @@ OUTPUT_FILE = "output/step3b_relations.jsonl"
 MAX_TOTAL_BATCHES = None # テスト用に最大バッチ数を設定 (Noneで無制限)
 
 print(f"デバッグ: ENTITY_PAIR_BATCH_SIZE: {ENTITY_PAIR_BATCH_SIZE}")
-print(f"デバッグ: DELAY_SECONDS: {DELAY_SECONDS}")
 print(f"デバッグ: MAX_TOTAL_BATCHES: {MAX_TOTAL_BATCHES}")
 
 # --- APIキーとモデルの設定 ---
@@ -44,7 +42,7 @@ def load_prompt_template(file_path):
         print(f"エラー: プロンプトファイルが見つかりません: {file_path}")
         return None
 
-def extract_relations_in_batches(model, paragraph, entities_in_paragraph, prompt_template, total_batch_counter):
+def extract_relations_in_batches(model, paragraph, entities_in_paragraph, prompt_template, total_batch_counter, wait=60):
     if len(entities_in_paragraph) < 2:
         return
 
@@ -97,9 +95,9 @@ def extract_relations_in_batches(model, paragraph, entities_in_paragraph, prompt
         total_batch_counter += 1
         yield total_batch_counter # ジェネレータから更新されたカウンタを返す
 
-        time.sleep(DELAY_SECONDS)
+        time.sleep(wait)
 
-def main(model_name='gemini-1.5-flash-latest'):
+def main(model_name='gemini-1.5-flash-latest', wait=60):
     print("--- ステップ: step3b を開始します ---")
     
     # --- APIキーとモデルの設定 ---
@@ -172,7 +170,7 @@ def main(model_name='gemini-1.5-flash-latest'):
         
         entities_in_paragraph = [entity for entity in entities if entity['term'] in paragraph]
 
-        relations_generator = extract_relations_in_batches(model, paragraph, entities_in_paragraph, prompt_template, total_batch_counter)
+        relations_generator = extract_relations_in_batches(model, paragraph, entities_in_paragraph, prompt_template, total_batch_counter, wait=wait)
         
         with open(OUTPUT_FILE, "a", encoding="utf-8") as f:
             for result in relations_generator:

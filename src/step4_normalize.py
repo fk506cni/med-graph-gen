@@ -20,7 +20,6 @@ PROMPT_TEMPLATE_PATH = "entity_normalization_prompt.md"
 # LLM呼び出しのパラメータ
 LLM_MODEL = "gemini-1.5-flash-latest"
 LLM_REQUEST_BATCH_SIZE = 100  # 一度にLLMに送るエンティティの数
-DELAY_SECONDS = 5  # APIレート制限のための待機時間
 
 def load_json(path):
     """JSONファイルを読み込む"""
@@ -46,7 +45,7 @@ def save_jsonl(data, path):
         for item in data:
             f.write(json.dumps(item, ensure_ascii=False) + '\n')
 
-def get_normalization_map_from_llm(entities, model_name):
+def get_normalization_map_from_llm(entities, model_name, wait=60):
     """LLMを使用して正規化マッピングを取得し、多数決で最終版を生成する"""
     print("LLMを呼び出してエンティティの正規化マッピングを生成します...")
     model = genai.GenerativeModel(model_name)
@@ -80,7 +79,7 @@ def get_normalization_map_from_llm(entities, model_name):
             print(f"エラー: LLM呼び出し中にエラーが発生しました: {e}")
 
         if i + LLM_REQUEST_BATCH_SIZE < len(entity_terms):
-            time.sleep(DELAY_SECONDS)
+            time.sleep(wait)
 
     # 多数決で最終的な正規化マッピングを決定
     final_normalization_map = {}
@@ -126,7 +125,7 @@ def normalize_relations(relations, normalization_map):
             normalized_relations.append(new_rel)
     return normalized_relations
 
-def main(model_name='gemini-1.5-flash-latest'):
+def main(model_name='gemini-1.5-flash-latest', wait=60):
     """
     エンティティとリレーションを正規化するメイン関数
     """
@@ -142,7 +141,7 @@ def main(model_name='gemini-1.5-flash-latest'):
     entities = load_json(INPUT_ENTITIES_PATH)
     relations = load_jsonl(INPUT_RELATIONS_PATH)
 
-    normalization_map = get_normalization_map_from_llm(entities, model_name)
+    normalization_map = get_normalization_map_from_llm(entities, model_name, wait=wait)
     save_json(normalization_map, NORMALIZATION_MAP_PATH)
     print(f"正規化マッピングを {NORMALIZATION_MAP_PATH} に保存しました。")
 

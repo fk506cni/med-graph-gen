@@ -66,7 +66,7 @@ def load_prompt_template(file_path):
     with open(file_path, 'r', encoding='utf-8') as f:
         return f.read()
 
-def clean_paragraphs_with_llm_batch(paragraphs_with_source, prompt_template, model_name, batch_size=5, delay=15):
+def clean_paragraphs_with_llm_batch(paragraphs_with_source, prompt_template, model_name, wait=60, batch_size=5):
     """LLMを使用して段落をクレンジングする（バッチ処理）"""
     model = genai.GenerativeModel(model_name)
     cleaned_data = []
@@ -108,11 +108,11 @@ def clean_paragraphs_with_llm_batch(paragraphs_with_source, prompt_template, mod
             print(f"バッチ処理中にエラーが発生しました: {e}")
             continue
         finally:
-            time.sleep(delay)
+            time.sleep(wait)
             
     return cleaned_data
 
-def main(model_name='gemini-1.5-flash-latest'):
+def main(model_name='gemini-1.5-flash-latest', wait=60):
     """メイン処理"""
     input_path = "output/step1_structured_text.json"
     prompt_template_path = "paragraph_cleaning_prompt.md"
@@ -129,7 +129,7 @@ def main(model_name='gemini-1.5-flash-latest'):
     prompt_template = load_prompt_template(prompt_template_path)
 
     print("LLMを使用して段落をクレンジング中（バッチ処理）...")
-    cleaned_paragraphs = clean_paragraphs_with_llm_batch(paragraphs_with_source, prompt_template, model_name)
+    cleaned_paragraphs = clean_paragraphs_with_llm_batch(paragraphs_with_source, prompt_template, model_name, wait=wait)
 
     print(f"クレンジングされた段落を {output_cleaned_text_path} に保存中...")
     with open(output_cleaned_text_path, 'w', encoding='utf-8') as f:

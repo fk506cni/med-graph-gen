@@ -30,13 +30,10 @@ def extract_text_from_pdf(pdf_path, start_page=None, end_page=None):
     doc.close()
     return text_by_page
 
-def main():
+def main(start_page=None, end_page=None):
     """メイン処理"""
     pdf_path = "input/c00543.pdf"
     output_path = "output/step1_structured_text.json"
-    # ページ範囲を指定しない場合はNoneに設定（全ページが対象となる）
-    start_page = None
-    end_page = None
 
     # outputディレクトリが存在しない場合は作成
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
