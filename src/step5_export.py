@@ -6,8 +6,11 @@ from collections import defaultdict
 # --- 定数 --- #
 INPUT_NORMALIZED_ENTITIES_PATH = "output/step4_normalized_entities.json"
 INPUT_NORMALIZED_RELATIONS_PATH = "output/step4_normalized_relations.jsonl"
+INPUT_NORMALIZATION_MAP_PATH = "output/step4_normalization_map.json"
 OUTPUT_NODES_PATH = "output/step5_nodes.csv"
 OUTPUT_EDGES_PATH = "output/step5_edges.csv"
+OUTPUT_NORMALIZATION_NODES_PATH = "output/step5_normalization_nodes.csv"
+OUTPUT_NORMALIZATION_EDGES_PATH = "output/step5_normalization_edges.csv"
 
 # PDFのファイル名（データソースとして使用）
 PDF_FILENAME = "c00543.pdf"
@@ -33,6 +36,49 @@ def load_jsonl(path):
         for line in f:
             data.append(json.loads(line))
     return data
+
+def export_normalization_graph():
+    """正規化マップをノードとエッジのCSVとしてエクスポートする"""
+    print("--- 正規化マップのグラフエクスポートを開始します ---")
+    if not os.path.exists(INPUT_NORMALIZATION_MAP_PATH):
+        print(f"エラー: {INPUT_NORMALIZATION_MAP_PATH} が見つかりません。")
+        return
+
+    normalization_map = load_json(INPUT_NORMALIZATION_MAP_PATH)
+
+    node_list = []
+    edge_list = []
+    term_to_node_id = {}
+    node_counter = 0
+
+    # マップ内のすべてのユニークなエンティティをノードとして追加
+    all_terms = set(normalization_map.keys()) | set(normalization_map.values())
+    for term in all_terms:
+        if term not in term_to_node_id:
+            node_id = f"TERM_{node_counter:04d}"
+            term_to_node_id[term] = node_id
+            node_list.append({"NodeID": node_id, "Label": term})
+            node_counter += 1
+
+    # 正規化関係をエッジとして追加
+    for alias, normalized_name in normalization_map.items():
+        if alias != normalized_name: # 自分自身への正規化はエッジにしない
+            source_id = term_to_node_id[alias]
+            target_id = term_to_node_id[normalized_name]
+            edge_list.append({
+                "SourceID": source_id,
+                "TargetID": target_id,
+                "Relation": "is_normalized_to"
+            })
+
+    nodes_df = pd.DataFrame(node_list)
+    nodes_df.to_csv(OUTPUT_NORMALIZATION_NODES_PATH, index=False, encoding='utf-8-sig')
+    print(f"正規化ノードリストを {OUTPUT_NORMALIZATION_NODES_PATH} に保存しました。 ({len(nodes_df)}件)")
+
+    edges_df = pd.DataFrame(edge_list)
+    edges_df.to_csv(OUTPUT_NORMALIZATION_EDGES_PATH, index=False, encoding='utf-8-sig')
+    print(f"正規化エッジリストを {OUTPUT_NORMALIZATION_EDGES_PATH} に保存しました。 ({len(edges_df)}件)")
+    print("--- 正規化マップのグラフエクスポートが完了しました ---")
 
 def main():
     """
@@ -106,6 +152,9 @@ def main():
     print(f"エッジリストを {OUTPUT_EDGES_PATH} に保存しました。 ({len(edges_df)}件)")
 
     print("--- ステップ5: CSVへのエクスポートが完了しました ---")
+
+    # 4. 正規化マップのグラフをエクスポート
+    export_normalization_graph()
 
 if __name__ == "__main__":
     from collections import defaultdict

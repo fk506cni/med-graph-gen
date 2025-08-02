@@ -21,9 +21,7 @@ med-graph-gen/
 │
 ├── Dockerfile
 ├── .env.example            # APIキー設定用のサンプルファイル
-├── entity_normalization_prompt.md
-├── relation_extraction_batch_prompt.md
-├── ... (その他プロンプトファイル)
+├── ... (プロンプトファイル)
 │
 ├── input/
 │   └── c00543.pdf          # 入力となるPDFファイル
@@ -37,7 +35,9 @@ med-graph-gen/
 │   ├── step4_normalized_relations.jsonl
 │   ├── step4_normalization_map.json
 │   ├── step5_nodes.csv
-│   └── step5_edges.csv
+│   ├── step5_edges.csv
+│   ├── step5_normalization_nodes.csv
+│   └── step5_normalization_edges.csv
 │
 └── src/                    # Pythonソースコード
     ├── main.py
@@ -67,35 +67,34 @@ graph TD;
 
     J --> K[output/step4_normalized_entities.json];
     J --> L[output/step4_normalized_relations.jsonl];
+    J --> P[output/step4_normalization_map.json];
 
     K --> M(step5_export.py);
     L --> M;
+    P --> M;
 
     M --> N[output/step5_nodes.csv];
     M --> O[output/step5_edges.csv];
+    M --> Q[output/step5_normalization_nodes.csv];
+    M --> R[output/step5_normalization_edges.csv];
 
     subgraph "処理フロー"
-        B(step1_extract)
-        D(step2a_clean)
-        F(step2b_extract)
-        H(step3b_relations)
-        J(step4_normalize)
-        M(step5_export)
+        B; D; F; H; J; M;
     end
 
     subgraph "データ"
-        A; C; E; G; I; K; L; N; O;
+        A; C; E; G; I; K; L; P; N; O; Q; R;
     end
 ```
 
 ## **実装ステップ**
 
 ### **ステップ1: テキスト抽出 (step1_extract.py)**
-*   **目的:** PDFから指定されたページ範囲のテキストを抽出します。`start_page`と`end_page`を`None`に設定することで全ページを対象とします。
+*   **目的:** PDFから指定されたページ範囲のテキストを抽出します。`--start_page`と`--end_page`引数で範囲を指定できます。
 *   **出力:** `output/step1_structured_text.json`
 
 ### **ステップ2a: テキストクレンジングと段落化 (step2a_clean_text.py)**
-*   **目的:** LLMを用いて、抽出したテキストからヘッダーやフッターなどの不要な情報を取り除き、内容を段落単位に分割します。
+*   **目的:** LLMを用いて、抽出したテキストから不要な情報を取り除き、段落単位に分割します。APIレート制限対策として`--wait`引数で待機時間を指定できます。
 *   **出力:** `output/step2a_cleaned_text.json`
 
 ### **ステップ2b: LLMによるエンティティ抽出 (step2b_extract_entities.py)**
@@ -103,25 +102,18 @@ graph TD;
 *   **出力:** `output/step2b_entities.json`
 
 ### **ステップ3b: LLMベースのリレーション抽出 (step3b_llm_based_relations.py)**
-*   **目的:** 段落内のエンティティのペアに基づき、LLMを用いてそれらの関係性を抽出します。`MAX_TOTAL_BATCHES`を`None`に設定することで、すべてのエンティティペアを処理します。
+*   **目的:** 段落内のエンティティのペアに基づき、LLMを用いてそれらの関係性を抽出します。
 *   **出力:** `output/step3b_relations.jsonl`
 
 ### **ステップ4: ナレッジの正規化 (step4_normalize.py)**
 *   **目的:** 抽出したエンティティの表記ゆれ（例: `非歯原性歯痛`と`NTDP`）を統一します。
-*   **処理フロー:**
-    1.  `output/step2b_entities.json` と `output/step3b_relations.jsonl` を読み込みます。
-    2.  エンティティのリストをバッチに分割し、各バッチをLLMに送信し、正規化名の候補を取得します。
-    3.  全バッチの候補を集計し、最も頻度の高いものを「代表名」として決定する多数決ロジックにより、最終的な正規化マッピングを作成します。
-    4.  このマッピングを用いて、エンティティとリレーションの表記を統一します。
 *   **出力:** `output/step4_normalized_entities.json`, `output/step4_normalized_relations.jsonl`, `output/step4_normalization_map.json`
 
 ### **ステップ5: CSVへのエクスポート (step5_export.py)**
-*   **目的:** 正規化されたエンティティとリレーションを、グラフデータベースで扱いやすいCSV形式に変換します。
-*   **処理フロー:**
-    1.  `output/step4_normalized_entities.json` と `output/step4_normalized_relations.jsonl` を読み込みます。
-    2.  各エンティティにユニークなID（例: `DISEASE_001`）を付与し、`nodes.csv` を生成します。
-    3.  リレーション情報内のエンティティ名を対応するIDに置換し、`edges.csv` を生成します。
-*   **出力:** `output/step5_nodes.csv`, `output/step5_edges.csv`
+*   **目的:** 正規化されたエンティティとリレーションを、グラフデータベースで扱いやすいCSV形式に変換します。また、正規化の対応関係そのものもグラフとしてCSV出力します。
+*   **出力:** 
+    *   `output/step5_nodes.csv`, `output/step5_edges.csv` (ナレッジグラフ)
+    *   `output/step5_normalization_nodes.csv`, `output/step5_normalization_edges.csv` (正規化関係グラフ)
 
 ## **前提条件**
 
@@ -142,42 +134,37 @@ graph TD;
     ```
 
 3.  **Dockerコンテナの実行:**
-    *   **全ステップを実行:**
-        以下のコマンドは、パイプライン全体を実行します。`-v`フラグは、ホストマシン（現在いる場所）のファイルをコンテナ内の作業ディレクトリに同期させるために使用します。これにより、コンテナは常に最新のコードとプロンプトで動作し、生成されたファイルはホストの`output`ディレクトリで直接確認できます。
-
+    *   **全ステップを実行 (基本):**
         ```bash
         docker run --rm --env-file .env \
-          -v "$(pwd)/output:/app/output" \
-          -v "$(pwd)/paragraph_cleaning_prompt.md:/app/paragraph_cleaning_prompt.md" \
-          -v "$(pwd)/entity_extraction_prompt.md:/app/entity_extraction_prompt.md" \
-          -v "$(pwd)/relation_extraction_batch_prompt.md:/app/relation_extraction_batch_prompt.md" \
-          -v "$(pwd)/entity_normalization_prompt.md:/app/entity_normalization_prompt.md" \
+          -v "/path/to/your/med-graph-gen/output:/app/output" \
+          -v "/path/to/your/med-graph-gen/paragraph_cleaning_prompt.md:/app/paragraph_cleaning_prompt.md" \
+          -v "/path/to/your/med-graph-gen/entity_extraction_prompt.md:/app/entity_extraction_prompt.md" \
+          -v "/path/to/your/med-graph-gen/relation_extraction_batch_prompt.md:/app/relation_extraction_batch_prompt.md" \
+          -v "/path/to/your/med-graph-gen/entity_normalization_prompt.md:/app/entity_normalization_prompt.md" \
           knowledge-graph-builder python -u src/main.py
         ```
+        *注意: `/path/to/your/med-graph-gen` の部分は、お使いの環境の `med-graph-gen` プロジェクトへの絶対パスに置き換えてください。*
 
-    *   **特定のLLMモデルを指定して全ステップを実行:**
-        `--model`引数で、デフォルトの`gemini-2.5-flash-lite`から任意のLLMモデルに変更できます。
+    *   **ページ範囲と待機時間を指定して実行:**
+        `--start_page`, `--end_page`, `--wait` 引数で、処理対象のページ範囲とAPI呼び出し間の待機時間（秒）を制御できます。
         ```bash
         docker run --rm --env-file .env \
-          -v "$(pwd)/output:/app/output" \
-          -v "$(pwd)/paragraph_cleaning_prompt.md:/app/paragraph_cleaning_prompt.md" \
-          -v "$(pwd)/entity_extraction_prompt.md:/app/entity_extraction_prompt.md" \
-          -v "$(pwd)/relation_extraction_batch_prompt.md:/app/relation_extraction_batch_prompt.md" \
-          -v "$(pwd)/entity_normalization_prompt.md:/app/entity_normalization_prompt.md" \
-          knowledge-graph-builder python -u src/main.py --model gemini-1.5-pro
+          -v "/path/to/your/med-graph-gen/output:/app/output" \
+          -v "/path/to/your/med-graph-gen/paragraph_cleaning_prompt.md:/app/paragraph_cleaning_prompt.md" \
+          -v "/path/to/your/med-graph-gen/entity_extraction_prompt.md:/app/entity_extraction_prompt.md" \
+          -v "/path/to/your/med-graph-gen/relation_extraction_batch_prompt.md:/app/relation_extraction_batch_prompt.md" \
+          -v "/path/to/your/med-graph-gen/entity_normalization_prompt.md:/app/entity_normalization_prompt.md" \
+          knowledge-graph-builder python -u src/main.py --start_page 12 --end_page 17 --wait 5
         ```
 
     *   **特定のステップから実行:**
-        `--start-step`引数で開始ステップを指定できます。例えば、`step5`から実行する場合、正規化済みのファイル（`step4_`から始まるファイル）が`output`ディレクトリに存在している必要があります。
-        ### step5はentity_normalization_prompt.mdに依存しないため、マウントを省略
+        `--start-step`引数で開始ステップを指定できます。例えば、`step5`から実行する場合、`output`ディレクトリに依存ファイルが存在している必要があります。
         ```bash
         docker run --rm --env-file .env \
-          -v "$(pwd)/output:/app/output" \
+          -v "/path/to/your/med-graph-gen/output:/app/output" \
           knowledge-graph-builder python -u src/main.py --start-step step5
         ```
-        *注意: 開始するステップによっては、依存するプロンプトファイルや中間データのマウントが別途必要になる場合があります。上記の例では、`step5`の実行に必要な`output`ディレクトリのみをマウントしています。*
-
-    実行が完了すると、ローカルの `output` ディレクトリに中間ファイルや最終的なCSVが生成されます。
 
 ## **生成されるCSVの例**
 
@@ -186,9 +173,7 @@ graph TD;
 ```csv
 NodeID,Label,Category
 DISEASE_001,非歯原性歯痛,疾患
-DISEASE_002,筋・筋膜痛,疾患
-DRUG_001,カルバマゼピン,薬剤
-TREATMENT_001,抜髄,治療法
+...
 ```
 
 **output/step5_edges.csv**
@@ -196,6 +181,22 @@ TREATMENT_001,抜髄,治療法
 ```csv
 SourceID,TargetID,Relation,DataSource
 DISEASE_001,DISEASE_002,has_underlying_disease,c00543.pdf_p12
-DRUG_001,DISEASE_001,is_effective_for,c00543.pdf_p40
-TREATTMENT_001,DISEASE_001,is_not_effective_for,c00543.pdf_p49
+...
+```
+
+**output/step5_normalization_nodes.csv**
+
+```csv
+NodeID,Label
+TERM_0001,非歯原性歯痛
+TERM_0002,NTDP
+...
+```
+
+**output/step5_normalization_edges.csv**
+
+```csv
+SourceID,TargetID,Relation
+TERM_0002,TERM_0001,is_normalized_to
+...
 ```
