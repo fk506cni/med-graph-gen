@@ -6,6 +6,12 @@
 
 これにより、人手を介さずに、文献情報から構造化された知識データを構築することを目指します。
 
+本プロジェクトは日本口腔顔面痛学会によって作成された、非歯原性歯痛の診療ガイドライン 改訂版を基に検証、作成されています。各プロンプトは当該ガイドラインをパースするべく記載されていますので、他の医学系ドキュメントを処理される場合はその資料に合わせた修正を検討ください。
+
+## **ライセンス**
+
+本プロジェクトのライセンスはGNU General Public License v3.0としていますが、取り扱うPDFおよびその出力産物についてはその範疇では有りません。出力ファイルの取扱は、PDFファイルの発行元にご確認ください。
+
 ## **概要**
 
 本プロジェクトは、提供されたPDFファイルから、医学用語の関連性（原因、症状、治療法など）を構造化したナレッジグラフを構築するためのCSVファイルを、人手による注釈なしで自動生成するシステムです。
@@ -135,7 +141,12 @@ graph TD;
 
 ## **実行手順**
 
-1.  **環境変数の設定:**
+1.  **レポジトリクローン:**
+    ```
+    git clone https://github.com/fk506cni/med-graph-gen    
+    ```
+
+2.  **環境変数の設定:**
     プロジェクトのルートディレクトリに `.env` ファイルを作成し、各種キー情報を記述します。
     ```
     GEMINI_API_KEY="<YOUR_API_KEY>"
@@ -144,56 +155,17 @@ graph TD;
     NEO4J_PASSWORD="<YOUR_NEO4J_PASSWORD>"
     ```
 
-2.  **Dockerイメージのビルド:**
-```
-
-## **実装ステップ**
-
-### **ステップ1: テキスト抽出 (step1_extract.py)**
-*   **目的:** PDFから指定されたページ範囲のテキストを抽出します。`--start_page`と`--end_page`引数で範囲を指定できます。
-*   **出力:** `output/step1_structured_text.json`
-
-### **ステップ2a: テキストクレンジングと段落化 (step2a_clean_text.py)**
-*   **目的:** LLMを用いて、抽出したテキストから不要な情報を取り除き、段落単位に分割します。APIレート制限対策として`--wait`引数で待機時間を指定できます。
-*   **出力:** `output/step2a_cleaned_text.json`
-
-### **ステップ2b: LLMによるエンティティ抽出 (step2b_extract_entities.py)**
-*   **目的:** クレンジングされた段落から、LLMを用いて医学用語（エンティティ）を抽出します。
-*   **出力:** `output/step2b_entities.json`
-
-### **ステップ3b: LLMベースのリレーション抽出 (step3b_llm_based_relations.py)**
-*   **目的:** 段落内のエンティティのペアに基づき、LLMを用いてそれらの関係性を抽出します。
-*   **出力:** `output/step3b_relations.jsonl`
-
-### **ステップ4: ナレッジの正規化 (step4_normalize.py)**
-*   **目的:** 抽出したエンティティの表記ゆれ（例: `非歯原性歯痛`と`NTDP`）を統一します。
-*   **出力:** `output/step4_normalized_entities.json`, `output/step4_normalized_relations.jsonl`, `output/step4_normalization_map.json`
-
-### **ステップ5: CSVへのエクスポート (step5_export.py)**
-*   **目的:** 正規化されたエンティティとリレーションを、グラフデータベースで扱いやすいCSV形式に変換します。この際、リレーション名を`skos`や`biolink`などの標準的なオントロジー語彙にマッピングし、データの相互運用性を高めます。また、正規化の対応関係そのものもグラフとしてCSV出力します。
-*   **出力:** 
-    *   `output/step5_nodes.csv`, `output/step5_edges.csv` (ナレッジグラフ)
-    *   `output/step5_normalization_nodes.csv`, `output/step5_normalization_edges.csv` (正規化関係グラフ)
-
-## **前提条件**
-
-*   [Docker](https://www.docker.com/) がインストールされていること。
-*   Gemini APIキーが取得済みであること。
-
-## **実行手順**
-
-1.  **Gemini APIキーの設定:**
-    プロジェクトのルートディレクトリに `.env` ファイルを作成し、お持ちのAPIキーを記述します。
+3.  **Dockerイメージのビルド:**
     ```
-    GEMINI_API_KEY="<YOUR_API_KEY>"
+    docker build -t knowledge-graph-builder .
     ```
-
-2.  **Dockerイメージのビルド:**
+    
+4.  **Dockerイメージのビルド:**
     ```bash
     docker build -t knowledge-graph-builder .
     ```
 
-3.  **Dockerコンテナの実行:**
+5.  **Dockerコンテナの実行:**
     *   **全ステップを実行 (推奨):**
         ```bash
         docker run --rm --env-file .env \
@@ -207,17 +179,21 @@ graph TD;
         ```
         *注意: `$(pwd)` は現在のディレクトリの絶対パスに展開されます。お使いのシェル環境によっては、`/path/to/your/med-graph-gen` のように手動で絶対パスを指定する必要がある場合があります.*
 
-    *   **ページ範囲と待機時間を指定して実行:**
-        `--start_page`, `--end_page`, `--wait` 引数で、処理対象のページ範囲とAPI呼び出し間の待機時間（秒）を制御できます。
+    *   **ページ範囲や実行ステップを指定して実行:**
+        `--start_page`, `--end_page` で処理対象のページ範囲を、`--wait` でAPI呼び出し間の待機時間（秒）を、`--start-step`, `--end-step` で実行する処理の範囲を制御できます。
+        `--wait`でLLMへの処理Wait時間を制御できます。60を設定することで1日の実行回数は1440ぐらいになるので、gemini-2.5-flash-liteの無料枠内に収まるはずです。
+        
         ```bash
-docker run --rm --env-file .env \
-  -v "$(pwd)/output:/app/output" \
-  -v "$(pwd)/input:/app/input" \
-  -v "$(pwd)/paragraph_cleaning_prompt.md:/app/paragraph_cleaning_prompt.md" \
-  -v "$(pwd)/entity_extraction_prompt.md:/app/entity_extraction_prompt.md" \
-  -v "$(pwd)/relation_extraction_batch_prompt.md:/app/relation_extraction_batch_prompt.md" \
-  -v "$(pwd)/entity_normalization_prompt.md:/app/entity_normalization_prompt.md" \
-  knowledge-graph-builder python -u -m src.main --start_page 12 --end_page 17 --wait 5
+        docker run --rm --env-file .env \
+        -v "$(pwd)/output:/app/output" \
+        -v "$(pwd)/input:/app/input" \
+        -v "$(pwd)/paragraph_cleaning_prompt.md:/app/paragraph_cleaning_prompt.md" \
+        -v "$(pwd)/entity_extraction_prompt.md:/app/entity_extraction_prompt.md" \
+        -v "$(pwd)/relation_extraction_batch_prompt.md:/app/relation_extraction_batch_prompt.md" \
+        -v "$(pwd)/entity_normalization_prompt.md:/app/entity_normalization_prompt.md" \
+        knowledge-graph-builder python -u -m src.main --start_page 12 --end_page 17 --wait 5 --start-step step2a --end-step step4
+        ```
+        *注意: `--start-step` のみ指定した場合はそのステップから最後まで、`--end-step` のみ指定した場合は最初からそのステップまで実行されます。*
 
 ## **生成されるCSVの例**
 

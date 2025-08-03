@@ -11,3 +11,7 @@ __pycache__/
 # Output files
 output/
 input/c00543.pdf
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+execution_note.ipynb
