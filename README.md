@@ -198,33 +198,26 @@ graph TD;
         ```bash
         docker run --rm --env-file .env \
           -v "$(pwd)/output:/app/output" \
+          -v "$(pwd)/input:/app/input" \
           -v "$(pwd)/paragraph_cleaning_prompt.md:/app/paragraph_cleaning_prompt.md" \
           -v "$(pwd)/entity_extraction_prompt.md:/app/entity_extraction_prompt.md" \
           -v "$(pwd)/relation_extraction_batch_prompt.md:/app/relation_extraction_batch_prompt.md" \
           -v "$(pwd)/entity_normalization_prompt.md:/app/entity_normalization_prompt.md" \
-          knowledge-graph-builder python -u src/main.py
+          knowledge-graph-builder python -u -m src.main
         ```
         *注意: `$(pwd)` は現在のディレクトリの絶対パスに展開されます。お使いのシェル環境によっては、`/path/to/your/med-graph-gen` のように手動で絶対パスを指定する必要がある場合があります.*
 
     *   **ページ範囲と待機時間を指定して実行:**
         `--start_page`, `--end_page`, `--wait` 引数で、処理対象のページ範囲とAPI呼び出し間の待機時間（秒）を制御できます。
         ```bash
-        docker run --rm --env-file .env \
-          -v "$(pwd)/output:/app/output" \
-          -v "$(pwd)/paragraph_cleaning_prompt.md:/app/paragraph_cleaning_prompt.md" \
-          -v "$(pwd)/entity_extraction_prompt.md:/app/entity_extraction_prompt.md" \
-          -v "$(pwd)/relation_extraction_batch_prompt.md:/app/relation_extraction_batch_prompt.md" \
-          -v "$(pwd)/entity_normalization_prompt.md:/app/entity_normalization_prompt.md" \
-          knowledge-graph-builder python -u src/main.py --start_page 12 --end_page 17 --wait 5
-        ```
-
-    *   **特定のステップから実行 (デバッグ用):**
-        `--start-step`引数で開始ステップを指定できます。例えば、`step6`から実行する場合、`output`ディレクトリに`step5`で生成されるCSVファイル群が事前に存在している必要があります。
-        ```bash
-        docker run --rm --env-file .env \
-          -v "$(pwd)/output:/app/output" \
-          knowledge-graph-builder python -u src/main.py --start-step step6
-        ```
+docker run --rm --env-file .env \
+  -v "$(pwd)/output:/app/output" \
+  -v "$(pwd)/input:/app/input" \
+  -v "$(pwd)/paragraph_cleaning_prompt.md:/app/paragraph_cleaning_prompt.md" \
+  -v "$(pwd)/entity_extraction_prompt.md:/app/entity_extraction_prompt.md" \
+  -v "$(pwd)/relation_extraction_batch_prompt.md:/app/relation_extraction_batch_prompt.md" \
+  -v "$(pwd)/entity_normalization_prompt.md:/app/entity_normalization_prompt.md" \
+  knowledge-graph-builder python -u -m src.main --start_page 12 --end_page 17 --wait 5
 
 ## **生成されるCSVの例**
 

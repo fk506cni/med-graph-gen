@@ -1,14 +1,6 @@
 import json
-import os
-import re
-import google.generativeai as genai
 import time
-
-# APIキーを環境変数から取得
-api_key = os.getenv("GEMINI_API_KEY")
-if not api_key:
-    raise ValueError("GEMINI_API_KEY environment variable not set.")
-genai.configure(api_key=api_key)
+from .llm_utils import get_gemini_model, llm_generate_with_retry
 
 def load_structured_text(file_path):
     """構造化されたテキストデータを読み込む"""
@@ -66,12 +58,10 @@ def load_prompt_template(file_path):
     with open(file_path, 'r', encoding='utf-8') as f:
         return f.read()
 
-def clean_paragraphs_with_llm_batch(paragraphs_with_source, prompt_template, model_name, wait=60, batch_size=5):
-    """LLMを使用して段落をクレンジングする（バッチ処理）"""
-    model = genai.GenerativeModel(model_name)
+def clean_paragraphs_with_llm_batch(paragraphs_with_source, prompt_template, model, wait=60, retries=3, batch_size=5):
+    """LLMを使用して段落をクレンジングする（バッチ処理＆リトライ機能付き）"""
     cleaned_data = []
     
-    # 入力は段落オブジェクトのリスト
     paragraphs_to_clean = [item['paragraph'] for item in paragraphs_with_source]
 
     for i in range(0, len(paragraphs_to_clean), batch_size):
@@ -83,17 +73,17 @@ def clean_paragraphs_with_llm_batch(paragraphs_with_source, prompt_template, mod
         
         try:
             print(f"段落バッチ {i // batch_size + 1} のクレンジングを開始... ({len(batch_paragraphs)}段落)")
-            response = model.generate_content(prompt)
+            response = llm_generate_with_retry(model, prompt, retries=retries)
+            
             response_text = response.text.strip()
             if response_text.startswith("```json") and response_text.endswith("```"):
-                response_json_str = response_text[len("```json"): -len("```")].strip()
+                response_json_str = response_text[len("```json"):-len("```")].strip()
             else:
                 response_json_str = response_text
 
             batch_cleaned_data = json.loads(response_json_str)
             cleaned_paragraphs_batch = batch_cleaned_data.get('cleaned_paragraphs', [])
             
-            # クレンジング結果と元の出典情報を組み合わせる
             for idx, cleaned_text in enumerate(cleaned_paragraphs_batch):
                 if cleaned_text and idx < len(batch_source_info):
                     original_source = batch_source_info[idx]['source_pages']
@@ -105,14 +95,18 @@ def clean_paragraphs_with_llm_batch(paragraphs_with_source, prompt_template, mod
             print(f"段落バッチ {i // batch_size + 1} のクレンジングが完了しました。")
 
         except Exception as e:
-            print(f"バッチ処理中にエラーが発生しました: {e}")
+            print(f"バッチ処理中に致命的なエラーが発生しました: {e}")
+            # エラーが発生したバッチはスキップして次のバッチへ
             continue
         finally:
-            time.sleep(wait)
+            # APIのレート制限を避けるために待機
+            if i + batch_size < len(paragraphs_to_clean):
+                print(f"{wait}秒待機します...")
+                time.sleep(wait)
             
     return cleaned_data
 
-def main(model_name='gemini-1.5-flash-latest', wait=60):
+def main(model_name='gemini-1.5-flash-latest', wait=60, retries=3):
     """メイン処理"""
     input_path = "output/step1_structured_text.json"
     prompt_template_path = "paragraph_cleaning_prompt.md"
@@ -128,8 +122,17 @@ def main(model_name='gemini-1.5-flash-latest', wait=60):
     print("プロンプトテンプレートを読み込み中...")
     prompt_template = load_prompt_template(prompt_template_path)
 
+    print("LLMモデルを初期化中...")
+    model = get_gemini_model(model_name)
+
     print("LLMを使用して段落をクレンジング中（バッチ処理）...")
-    cleaned_paragraphs = clean_paragraphs_with_llm_batch(paragraphs_with_source, prompt_template, model_name, wait=wait)
+    cleaned_paragraphs = clean_paragraphs_with_llm_batch(
+        paragraphs_with_source, 
+        prompt_template, 
+        model, 
+        wait=wait, 
+        retries=retries
+    )
 
     print(f"クレンジングされた段落を {output_cleaned_text_path} に保存中...")
     with open(output_cleaned_text_path, 'w', encoding='utf-8') as f:
@@ -138,4 +141,6 @@ def main(model_name='gemini-1.5-flash-latest', wait=60):
     print("処理が完了しました。")
 
 if __name__ == "__main__":
+    # main.pyから呼び出されることを想定しているため、
+    # 直接実行する場合の引数処理は省略しています。
     main()

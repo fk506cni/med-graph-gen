@@ -41,6 +41,7 @@
 
 ### Recent Updates (August 2, 2025)
 
+*   **Added Retry Logic for LLM Calls:** Implemented a retry mechanism for all LLM API calls to handle transient network errors or API failures gracefully. A new `--retries` command-line argument allows specifying the number of retries (defaulting to 3).
 *   **Implemented Neo4j Import (Step 6):** Added a new pipeline step (`step6_import_to_neo4j.py`) to automatically import the generated knowledge graph CSVs into a Neo4j Aura database. This includes adding the `neo4j` dependency and updating the main pipeline script.
 *   **Added CLI Arguments:** Implemented `--wait`, `--start_page`, and `--end_page` arguments for better control over the pipeline execution.
 *   **Enhanced Step 5:** Added functionality to export the normalization map as a separate graph.

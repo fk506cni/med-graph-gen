@@ -1,12 +1,12 @@
 import argparse
-import step1_extract
-import step2a_clean_text
-import step2b_extract_entities
-# import step3a_rule_based_relations
-import step3b_llm_based_relations
-import step4_normalize
-import step5_export
-import step6_import_to_neo4j
+from . import step1_extract
+from . import step2a_clean_text
+from . import step2b_extract_entities
+# from . import step3a_rule_based_relations
+from . import step3b_llm_based_relations
+from . import step4_normalize
+from . import step5_export
+from . import step6_import_to_neo4j
 
 def main():
     parser = argparse.ArgumentParser(description="ナレッジグラフ生成パイプライン")
@@ -28,6 +28,12 @@ def main():
         type=int,
         default=60,
         help='APIレート制限のための待機時間（秒）'
+    )
+    parser.add_argument(
+        '--retries',
+        type=int,
+        default=3,
+        help='API呼び出しの最大リトライ回数'
     )
     parser.add_argument(
         '--start_page',
@@ -76,8 +82,10 @@ def main():
             elif current_step in llm_steps:
                 kwargs['model_name'] = args.model
                 kwargs['wait'] = args.wait
+                kwargs['retries'] = args.retries
                 print(f"使用モデル: {args.model}")
                 print(f"待機時間: {args.wait}秒")
+                print(f"リトライ回数: {args.retries}回")
 
             steps[current_step](**kwargs)
             print(f"--- ステップ: {current_step} が完了しました ---")
@@ -86,4 +94,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 

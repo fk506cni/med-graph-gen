@@ -2,23 +2,16 @@ import json
 import os
 import time
 from collections import Counter, defaultdict
-import google.generativeai as genai
 from tqdm import tqdm
+from .llm_utils import get_gemini_model, llm_generate_with_retry
 
 # --- 定数 --- #
-# APIキーを環境変数から取得
-genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-
-# 入出力ファイルのパス
 INPUT_ENTITIES_PATH = "output/step2b_entities.json"
 INPUT_RELATIONS_PATH = "output/step3b_relations.jsonl"
 OUTPUT_NORMALIZED_ENTITIES_PATH = "output/step4_normalized_entities.json"
 OUTPUT_NORMALIZED_RELATIONS_PATH = "output/step4_normalized_relations.jsonl"
 NORMALIZATION_MAP_PATH = "output/step4_normalization_map.json"
 PROMPT_TEMPLATE_PATH = "entity_normalization_prompt.md"
-
-# LLM呼び出しのパラメータ
-LLM_MODEL = "gemini-1.5-flash-latest"
 LLM_REQUEST_BATCH_SIZE = 100  # 一度にLLMに送るエンティティの数
 
 def load_json(path):
@@ -45,24 +38,22 @@ def save_jsonl(data, path):
         for item in data:
             f.write(json.dumps(item, ensure_ascii=False) + '\n')
 
-def get_normalization_map_from_llm(entities, model_name, wait=60):
+def get_normalization_map_from_llm(entities, model, wait=60, retries=3):
     """LLMを使用して正規化マッピングを取得し、多数決で最終版を生成する"""
     print("LLMを呼び出してエンティティの正規化マッピングを生成します...")
-    model = genai.GenerativeModel(model_name)
     with open(PROMPT_TEMPLATE_PATH, 'r', encoding='utf-8') as f:
         prompt_template = f.read()
 
     all_suggestions = defaultdict(list)
     entity_terms = [entity['term'] for entity in entities]
 
-    # エンティティリストをバッチに分割して処理
     for i in tqdm(range(0, len(entity_terms), LLM_REQUEST_BATCH_SIZE), desc="正規化マッピング生成"):
         batch = entity_terms[i:i + LLM_REQUEST_BATCH_SIZE]
         entities_json_str = json.dumps(batch, ensure_ascii=False, indent=2)
         prompt = prompt_template.format(entities_json=entities_json_str)
 
         try:
-            response = model.generate_content(prompt)
+            response = llm_generate_with_retry(model, prompt, retries=retries)
             response_text = response.text.strip()
             json_start = response_text.find('```json') + len('```json\n')
             json_end = response_text.rfind('```')
@@ -76,12 +67,11 @@ def get_normalization_map_from_llm(entities, model_name, wait=60):
                 print(f"警告: バッチ {i//LLM_REQUEST_BATCH_SIZE + 1} の応答からJSONを抽出できませんでした。")
 
         except Exception as e:
-            print(f"エラー: LLM呼び出し中にエラーが発生しました: {e}")
+            print(f"エラー: LLM呼び出し中に致命的なエラーが発生しました: {e}")
 
         if i + LLM_REQUEST_BATCH_SIZE < len(entity_terms):
             time.sleep(wait)
 
-    # 多数決で最終的な正規化マッピングを決定
     final_normalization_map = {}
     print("\n正規化マッピングを統合しています...")
     for alias, suggestions in tqdm(all_suggestions.items(), desc="マッピング統合"):
@@ -125,7 +115,7 @@ def normalize_relations(relations, normalization_map):
             normalized_relations.append(new_rel)
     return normalized_relations
 
-def main(model_name='gemini-1.5-flash-latest', wait=60):
+def main(model_name='gemini-1.5-flash-latest', wait=60, retries=3):
     """
     エンティティとリレーションを正規化するメイン関数
     """
@@ -141,7 +131,9 @@ def main(model_name='gemini-1.5-flash-latest', wait=60):
     entities = load_json(INPUT_ENTITIES_PATH)
     relations = load_jsonl(INPUT_RELATIONS_PATH)
 
-    normalization_map = get_normalization_map_from_llm(entities, model_name, wait=wait)
+    model = get_gemini_model(model_name)
+
+    normalization_map = get_normalization_map_from_llm(entities, model, wait=wait, retries=retries)
     save_json(normalization_map, NORMALIZATION_MAP_PATH)
     print(f"正規化マッピングを {NORMALIZATION_MAP_PATH} に保存しました。")
 

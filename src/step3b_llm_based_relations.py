@@ -3,7 +3,7 @@ import os
 import time
 from itertools import combinations
 from string import Template
-import google.generativeai as genai
+from .llm_utils import get_gemini_model, llm_generate_with_retry
 
 # --- 定数 ---
 ENTITY_PAIR_BATCH_SIZE = 100 # 1回のLLM呼び出しで処理するエンティティペアの数
@@ -11,28 +11,6 @@ INPUT_CLEANED_TEXT_PATH = "output/step2a_cleaned_text.json"
 INPUT_ENTITIES_PATH = "output/step2b_entities.json"
 OUTPUT_FILE = "output/step3b_relations.jsonl"
 MAX_TOTAL_BATCHES = None # テスト用に最大バッチ数を設定 (Noneで無制限)
-
-print(f"デバッグ: ENTITY_PAIR_BATCH_SIZE: {ENTITY_PAIR_BATCH_SIZE}")
-print(f"デバッグ: MAX_TOTAL_BATCHES: {MAX_TOTAL_BATCHES}")
-
-# --- APIキーとモデルの設定 ---
-print("デバッグ: APIキーの設定を開始します...")
-try:
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        raise KeyError("GEMINI_API_KEY 環境変数が設定されていません。")
-    genai.configure(api_key=api_key)
-    print("デバッグ: APIキーの設定が完了しました。")
-    
-    print("デバッグ: Geminiモデルの初期化を開始します...")
-    model = genai.GenerativeModel('gemini-1.5-flash')
-    print("デバッグ: Geminiモデルの初期化が完了しました。")
-except KeyError as e:
-    print(f"エラー: {e}")
-    exit(1)
-except Exception as e:
-    print(f"エラー: モデルの初期化中に予期せぬエラーが発生しました: {e}")
-    exit(1)
 
 def load_prompt_template(file_path):
     try:
@@ -42,7 +20,7 @@ def load_prompt_template(file_path):
         print(f"エラー: プロンプトファイルが見つかりません: {file_path}")
         return None
 
-def extract_relations_in_batches(model, paragraph, entities_in_paragraph, prompt_template, total_batch_counter, wait=60):
+def extract_relations_in_batches(model, paragraph, entities_in_paragraph, prompt_template, total_batch_counter, wait=60, retries=3):
     if len(entities_in_paragraph) < 2:
         return
 
@@ -67,7 +45,8 @@ def extract_relations_in_batches(model, paragraph, entities_in_paragraph, prompt
                 log_message += f"/{MAX_TOTAL_BATCHES}"
             log_message += f" (段落内 {i//ENTITY_PAIR_BATCH_SIZE + 1}/{(len(all_pairs) + ENTITY_PAIR_BATCH_SIZE - 1)//ENTITY_PAIR_BATCH_SIZE}): {len(batch_pairs)}ペアを処理中..."
             print(log_message)
-            response = model.generate_content(prompt)
+            
+            response = llm_generate_with_retry(model, prompt, retries=retries)
             response_text = response.text.strip()
             
             json_start = response_text.find('[')
@@ -86,72 +65,48 @@ def extract_relations_in_batches(model, paragraph, entities_in_paragraph, prompt
             print(f"    -> エラー: LLMのレスポンスのJSONパースに失敗しました。")
             print(f"       LLM Response: {response_text}")
         except Exception as e:
-            if "429" in str(e):
-                print("    -> エラー: APIレート制限に達しました。60秒待機します...")
-                time.sleep(60)
-            else:
-                print(f"    -> LLM呼び出し中に予期せぬエラーが発生しました: {e}")
+            print(f"    -> LLM呼び出し中に致命的なエラーが発生しました: {e}")
         
         total_batch_counter += 1
         yield total_batch_counter # ジェネレータから更新されたカウンタを返す
 
-        time.sleep(wait)
+        if i + ENTITY_PAIR_BATCH_SIZE < len(all_pairs):
+            time.sleep(wait)
 
-def main(model_name='gemini-2.5-flash-lite', wait=60):
+def main(model_name='gemini-1.5-flash-latest', wait=60, retries=3):
     print("--- ステップ: step3b を開始します ---")
     
-    # --- APIキーとモデルの設定 ---
-    print("デバッグ: APIキーの設定を開始します...")
-    try:
-        api_key = os.environ.get("GEMINI_API_KEY")
-        if not api_key:
-            raise KeyError("GEMINI_API_KEY 環境変数が設定されていません。")
-        genai.configure(api_key=api_key)
-        print("デバッグ: APIキーの設定が完了しました。")
-        
-        print(f"デバッグ: Geminiモデル「{model_name}」の初期化を開始します...")
-        model = genai.GenerativeModel(model_name)
-        print("デバッグ: Geminiモデルの初期化が完了しました。")
-    except KeyError as e:
-        print(f"エラー: {e}")
-        exit(1)
-    except Exception as e:
-        print(f"エラー: モデルの初期化中に予期せぬエラーが発生しました: {e}")
-        exit(1)
+    model = get_gemini_model(model_name)
 
-    # デバッグ: ファイルの存在確認と初期化
-    print(f"デバッグ: {OUTPUT_FILE} の初期化を試みます...")
     try:
-        # 出力ディレクトリが存在しない場合は作成
+        print(f"DEBUG: Current working directory: {os.getcwd()}")
         output_dir = os.path.dirname(OUTPUT_FILE)
+        print(f"DEBUG: Trying to use output directory: {output_dir}")
+        print(f"DEBUG: Absolute path of output directory: {os.path.abspath(output_dir)}")
+        print(f"DEBUG: Does output directory exist? {os.path.exists(output_dir)}")
         if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-            print(f"デバッグ: 出力ディレクトリ {output_dir} を作成しました。")
-        
+            print(f"DEBUG: Output directory does not exist. Creating it...")
+            try:
+                os.makedirs(output_dir)
+                print(f"DEBUG: Successfully created directory: {output_dir}")
+            except Exception as e:
+                print(f"FATAL: Failed to create directory {output_dir}: {e}")
+                return
+        print(f"DEBUG: Trying to open {OUTPUT_FILE} for writing...")
         with open(OUTPUT_FILE, "w") as f:
-            pass # ファイルを空にする
-        print(f"デバッグ: {OUTPUT_FILE} の初期化完了。")
+            pass
+        print(f"DEBUG: Successfully initialized {OUTPUT_FILE}")
     except Exception as e:
         print(f"エラー: {OUTPUT_FILE} の初期化に失敗しました: {e}")
         return
 
-    # 入力ファイルの読み込み
     try:
-        print(f"デバッグ: {INPUT_CLEANED_TEXT_PATH} の読み込みを開始します...")
         with open(INPUT_CLEANED_TEXT_PATH, "r", encoding="utf-8") as f:
             cleaned_text = json.load(f)
-        print(f"デバッグ: {INPUT_CLEANED_TEXT_PATH} の読み込み完了。")
-        
-        print(f"デバッグ: {INPUT_ENTITIES_PATH} の読み込みを開始します...")
         with open(INPUT_ENTITIES_PATH, "r", encoding="utf-8") as f:
             entities = json.load(f)
-        print(f"デバッグ: {INPUT_ENTITIES_PATH} の読み込み完了。")
-
     except FileNotFoundError as e:
         print(f"エラー: 入力ファイルが見つかりません: {e.filename}")
-        return
-    except Exception as e:
-        print(f"エラー: 入力ファイルの読み込み中に予期せぬエラーが発生しました: {e}")
         return
 
     prompt_template = load_prompt_template("relation_extraction_batch_prompt.md")
@@ -170,7 +125,7 @@ def main(model_name='gemini-2.5-flash-lite', wait=60):
         
         entities_in_paragraph = [entity for entity in entities if entity['term'] in paragraph]
 
-        relations_generator = extract_relations_in_batches(model, paragraph, entities_in_paragraph, prompt_template, total_batch_counter, wait=wait)
+        relations_generator = extract_relations_in_batches(model, paragraph, entities_in_paragraph, prompt_template, total_batch_counter, wait=wait, retries=retries)
         
         with open(OUTPUT_FILE, "a", encoding="utf-8") as f:
             for result in relations_generator:
