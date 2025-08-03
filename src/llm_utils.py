@@ -1,3 +1,6 @@
+import os 
+import google.generativeai as genai
+import time
 
 def get_gemini_model(model_name):
     """

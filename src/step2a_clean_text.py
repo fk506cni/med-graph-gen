@@ -1,6 +1,7 @@
 import json
 import time
 from .llm_utils import get_gemini_model, llm_generate_with_retry
+import os
 
 def load_structured_text(file_path):
     """構造化されたテキストデータを読み込む

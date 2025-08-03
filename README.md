@@ -2,26 +2,26 @@
 
 ## **はじめに** / Introduction
 
-`med-graph-gen`は、医学系PDFドキュメント（例：診療ガイドライン）を解析し、そこに含まれる専門用語（疾患、薬剤、治療法など）とその関係性を抽出して、ナレッジグラフ形式のCSVファイル（ノードリストとエッジリスト）を自動生成するツールです。
+`med-graph-gen`は、医学系PDFドキュメント（例：診療ガイドライン）を解析し、そこに含まれる専門用語（疾患、薬剤、治療法など）とその関係性を抽出して、ナレッジグラフ形式のCSVファイル（ノードリストとエッジリスト）を自動生成するツールです。  
 `med-graph-gen` is a tool that analyzes medical PDF documents (e.g., clinical guidelines), extracts specialized terms (such as diseases, drugs, and treatments) and their relationships, and automatically generates knowledge graph CSV files (node and edge lists).
 
-これにより、人手を介さずに、文献情報から構造化された知識データを構築することを目指します。
+これにより、人手を介さずに、文献情報から構造化された知識データを構築することを目指します。  
 The goal is to build structured knowledge data from literature information without manual intervention.
 
-本プロジェクトは日本口腔顔面痛学会によって作成された、非歯原性歯痛の診療ガイドライン 改訂版を基に検証、作成されています。各プロンプトは当該ガイドラインをパースするべく記載されていますので、他の医学系ドキュメントを処理される場合はその資料に合わせた修正を検討ください。
+本プロジェクトは日本口腔顔面痛学会によって作成された、非歯原性歯痛の診療ガイドライン 改訂版を基に検証、作成されています。各プロンプトは当該ガイドラインをパースするべく記載されていますので、他の医学系ドキュメントを処理される場合はその資料に合わせた修正を検討ください。  
 This project has been verified and created based on the revised clinical guidelines for non-odontogenic toothache created by the Japanese Society of Orofacial Pain. The prompts are designed to parse these specific guidelines, so if you are processing other medical documents, please consider modifying them to suit the new material.
 
 ## **ライセンス** / License
 
-本プロジェクトのライセンスはGNU General Public License v3.0としていますが、取り扱うPDFおよびその出力産物についてはその範疇では有りません。出力ファイルの取扱は、PDFファイルの発行元にご確認ください。
+本プロジェクトのライセンスはGNU General Public License v3.0としていますが、取り扱うPDFおよびその出力産物についてはその範疇では有りません。出力ファイルの取扱は、PDFファイルの発行元にご確認ください。  
 The license for this project is the GNU General Public License v3.0, but this does not cover the processed PDFs and their outputs. Please check with the publisher of the PDF file regarding the handling of the output files.
 
 ## **概要** / Overview
 
-本プロジェクトは、提供されたPDFファイルから、医学用語の関連性（原因、症状、治療法など）を構造化したナレッジグラフを構築するためのCSVファイルを、人手による注釈なしで自動生成するシステムです。
+本プロジェクトは、提供されたPDFファイルから、医学用語の関連性（原因、症状、治療法など）を構造化したナレッジグラフを構築するためのCSVファイルを、人手による注釈なしで自動生成するシステムです。  
 This project is a system that automatically generates CSV files for building a structured knowledge graph of medical term relationships (such as causes, symptoms, and treatments) from a provided PDF file, without manual annotation.
 
-ローカルでの実行環境はDockerコンテナ上に構築し、環境差異による影響を排除し、再現性を担保します。
+ローカルでの実行環境はDockerコンテナ上に構築し、環境差異による影響を排除し、再現性を担保します。  
 The local execution environment is built on a Docker container to eliminate the effects of environmental differences and ensure reproducibility.
 
 ## **プロジェクト構成** / Project Structure

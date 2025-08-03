@@ -1,3 +1,9 @@
+import os
+import json
+import pandas as pd
+from collections import defaultdict
+
+
 # --- 定数 --- #
 # --- Constants --- #
 INPUT_NORMALIZED_ENTITIES_PATH = "output/step4_normalized_entities.json"
