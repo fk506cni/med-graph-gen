@@ -20,7 +20,7 @@ def main():
     parser.add_argument(
         '--model',
         type=str,
-        default='gemini-1.5-flash-latest',
+        default='gemini-2.5-flash-lite',
         help='使用するLLMモデルを指定します'
     )
     parser.add_argument(

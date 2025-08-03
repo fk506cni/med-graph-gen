@@ -6,7 +6,7 @@ from string import Template
 import google.generativeai as genai
 
 # --- 定数 ---
-ENTITY_PAIR_BATCH_SIZE = 50 # 1回のLLM呼び出しで処理するエンティティペアの数
+ENTITY_PAIR_BATCH_SIZE = 100 # 1回のLLM呼び出しで処理するエンティティペアの数
 INPUT_CLEANED_TEXT_PATH = "output/step2a_cleaned_text.json"
 INPUT_ENTITIES_PATH = "output/step2b_entities.json"
 OUTPUT_FILE = "output/step3b_relations.jsonl"
@@ -97,7 +97,7 @@ def extract_relations_in_batches(model, paragraph, entities_in_paragraph, prompt
 
         time.sleep(wait)
 
-def main(model_name='gemini-1.5-flash-latest', wait=60):
+def main(model_name='gemini-2.5-flash-lite', wait=60):
     print("--- ステップ: step3b を開始します ---")
     
     # --- APIキーとモデルの設定 ---
