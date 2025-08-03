@@ -41,15 +41,17 @@ def main():
     driver = get_neo4j_driver()
 
     # Import knowledge graph nodes and edges
+    # ナレッジグラフのノードとエッジをインポート
     import_nodes(driver, 'output/step5_nodes.csv', 'Node', 'NodeID', ['Label', 'Category'])
     import_edges(driver, 'output/step5_edges.csv', 'SourceID', 'TargetID', 'Relation', 'Node', 'Node', 'NodeID', 'NodeID')
 
     # Import normalization graph nodes and edges
+    # 正規化グラフのノードとエッジをインポート
     import_nodes(driver, 'output/step5_normalization_nodes.csv', 'Term', 'NodeID', ['Label'])
     import_edges(driver, 'output/step5_normalization_edges.csv', 'SourceID', 'TargetID', 'Relation', 'Term', 'Term', 'NodeID', 'NodeID')
 
     driver.close()
-    print("Successfully imported data into Neo4j.")
+    print("Successfully imported data into Neo4j. / Neo4jへのデータインポートが正常に完了しました。")
 
 if __name__ == "__main__":
     main()

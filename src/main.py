@@ -10,6 +10,7 @@ from . import step6_import_to_neo4j
 
 def main():
     # 利用可能なステップとそれに対応する関数をマッピング
+    # Map available steps to their corresponding functions
     steps = {
         'step1': step1_extract.main,
         'step2a': step2a_clean_text.main,
@@ -22,66 +23,68 @@ def main():
     }
     step_order = list(steps.keys())
 
-    parser = argparse.ArgumentParser(description="ナレッジグラフ生成パイプライン")
+    parser = argparse.ArgumentParser(description="ナレッジグラフ生成パイプライン / Knowledge Graph Generation Pipeline")
     parser.add_argument(
         '--start-step',
         type=str,
         default=step_order[0],
         choices=step_order,
-        help='パイプラインを開始するステップを指定します'
+        help='パイプラインを開始するステップを指定します / Specify the step to start the pipeline from'
     )
     parser.add_argument(
         '--end-step',
         type=str,
         default=step_order[-1],
         choices=step_order,
-        help='パイプラインを終了するステップを指定します'
+        help='パイプラインを終了するステップを指定します / Specify the step to end the pipeline at'
     )
     parser.add_argument(
         '--model',
         type=str,
-        default='gemini-2.5-flash-lite',
-        help='使用するLLMモデルを指定します'
+        default='gemini-1.5-flash',
+        help='使用するLLMモデルを指定します / Specify the LLM model to use'
     )
     parser.add_argument(
         '--wait',
         type=int,
         default=60,
-        help='APIレート制限のための待機時間（秒）'
+        help='APIレート制限のための待機時間（秒） / Wait time in seconds for API rate limiting'
     )
     parser.add_argument(
         '--retries',
         type=int,
         default=3,
-        help='API呼び出しの最大リトライ回数'
+        help='API呼び出しの最大リトライ回数 / Maximum number of retries for API calls'
     )
     parser.add_argument(
         '--start_page',
         type=int,
         default=None,
-        help='処理を開始するページ番号'
+        help='処理を開始するページ番号 / Page number to start processing from'
     )
     parser.add_argument(
         '--end_page',
         type=int,
         default=None,
-        help='処理を終了するページ番号'
+        help='処理を終了するページ番号 / Page number to end processing at'
     )
     args = parser.parse_args()
 
     # LLMを必要とするステップのリスト
+    # List of steps that require an LLM
     llm_steps = ['step2a', 'step2b', 'step3b', 'step4']
 
     # 指定された開始ステップと終了ステップから処理範囲を決定
+    # Determine the processing range from the specified start and end steps
     start_index = step_order.index(args.start_step)
     end_index = step_order.index(args.end_step)
 
     if start_index > end_index:
-        parser.error("--start-step は --end-step より前のステップでなければなりません。")
+        parser.error("--start-step は --end-step より前のステップでなければなりません。 / --start-step must be a step before --end-step.")
 
     for i in range(start_index, end_index + 1):
         current_step = step_order[i]
-        print(f"\n--- ステップ: {current_step} を開始します ---")
+        print(f"\n--- ステップ: {current_step} を開始します / Starting step: {current_step} ---")
         
         kwargs = {}
         if current_step == 'step1':
@@ -91,12 +94,13 @@ def main():
             kwargs['model_name'] = args.model
             kwargs['wait'] = args.wait
             kwargs['retries'] = args.retries
-            print(f"使用モデル: {args.model}")
-            print(f"待機時間: {args.wait}秒")
-            print(f"リトライ回数: {args.retries}回")
+            print(f"使用モデル / Model used: {args.model}")
+            print(f"待機時間 / Wait time: {args.wait}秒 / seconds")
+            print(f"リトライ回数 / Retries: {args.retries}回 / times")
 
         steps[current_step](**kwargs)
-        print(f"--- ステップ: {current_step} が完了しました ---")
+        print(f"--- ステップ: {current_step} が完了しました / Step: {current_step} completed ---")
+
 
 if __name__ == "__main__":
     main()

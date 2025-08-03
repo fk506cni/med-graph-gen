@@ -1,9 +1,5 @@
-import json
-import os
-import pandas as pd
-from collections import defaultdict
-
 # --- 定数 --- #
+# --- Constants --- #
 INPUT_NORMALIZED_ENTITIES_PATH = "output/step4_normalized_entities.json"
 INPUT_NORMALIZED_RELATIONS_PATH = "output/step4_normalized_relations.jsonl"
 INPUT_NORMALIZATION_MAP_PATH = "output/step4_normalization_map.json"
@@ -22,6 +18,7 @@ CATEGORY_PREFIX_MAP = {
 }
 
 # 標準的なオントロジーへのリレーション名マッピング
+# Mapping of relation names to standard ontologies
 RELATION_MAP = {
     "is_a": "rdfs:subClassOf",
     "causes": "biolink:causes",
@@ -45,9 +42,9 @@ def load_jsonl(path):
     return data
 
 def export_normalization_graph():
-    print("--- 正規化マップのグラフエクスポートを開始します ---")
+    print("--- 正規化マップのグラフエクスポートを開始します --- / --- Starting export of normalization map graph ---")
     if not os.path.exists(INPUT_NORMALIZATION_MAP_PATH):
-        print(f"エラー: {INPUT_NORMALIZATION_MAP_PATH} が見つかりません。")
+        print(f"エラー: {INPUT_NORMALIZATION_MAP_PATH} が見つかりません。 / Error: {INPUT_NORMALIZATION_MAP_PATH} not found.")
         return
 
     normalization_map = load_json(INPUT_NORMALIZATION_MAP_PATH)
@@ -70,21 +67,21 @@ def export_normalization_graph():
             edge_list.append({
                 "SourceID": source_id,
                 "TargetID": target_id,
-                "Relation": "skos:exactMatch"  # is_normalized_to から変更
+                "Relation": "skos:exactMatch"  # is_normalized_to から変更 / Changed from is_normalized_to
             })
 
     pd.DataFrame(node_list).to_csv(OUTPUT_NORMALIZATION_NODES_PATH, index=False, encoding='utf-8-sig')
-    print(f"正規化ノードリストを {OUTPUT_NORMALIZATION_NODES_PATH} に保存しました。 ({len(node_list)}件)")
+    print(f"正規化ノードリストを {OUTPUT_NORMALIZATION_NODES_PATH} に保存しました。 ({len(node_list)}件) / Saved normalization node list to {OUTPUT_NORMALIZATION_NODES_PATH}. ({len(node_list)} items)")
 
     pd.DataFrame(edge_list).to_csv(OUTPUT_NORMALIZATION_EDGES_PATH, index=False, encoding='utf-8-sig')
-    print(f"正規化エッジリストを {OUTPUT_NORMALIZATION_EDGES_PATH} に保存しました。 ({len(edge_list)}件)")
-    print("--- 正規化マップのグラフエクスポートが完了しました ---")
+    print(f"正規化エッジリストを {OUTPUT_NORMALIZATION_EDGES_PATH} に保存しました。 ({len(edge_list)}件) / Saved normalization edge list to {OUTPUT_NORMALIZATION_EDGES_PATH}. ({len(edge_list)} items)")
+    print("--- 正規化マップのグラフエクスポートが完了しました --- / --- Export of normalization map graph completed ---")
 
 def main():
-    print("--- ステップ5: CSVへのエクスポートを開始します ---")
+    print("--- ステップ5: CSVへのエクスポートを開始します --- / --- Step 5: Starting export to CSV ---")
 
     if not os.path.exists(INPUT_NORMALIZED_ENTITIES_PATH) or not os.path.exists(INPUT_NORMALIZED_RELATIONS_PATH):
-        print(f"エラー: 入力ファイルが見つかりません。")
+        print(f"エラー: 入力ファイルが見つかりません。 / Error: Input file not found.")
         return
 
     entities = load_json(INPUT_NORMALIZED_ENTITIES_PATH)
@@ -105,7 +102,7 @@ def main():
 
     nodes_df = pd.DataFrame(node_list)
     nodes_df.to_csv(OUTPUT_NODES_PATH, index=False, encoding='utf-8-sig')
-    print(f"ノードリストを {OUTPUT_NODES_PATH} に保存しました。 ({len(nodes_df)}件)")
+    print(f"ノードリストを {OUTPUT_NODES_PATH} に保存しました。 ({len(nodes_df)}件) / Saved node list to {OUTPUT_NODES_PATH}. ({len(nodes_df)} items)")
 
     edge_list = []
     for rel in relations:
@@ -120,6 +117,7 @@ def main():
         target_id = entity_to_node_id[target_term]
         
         # 標準的なリレーション名に変換
+        # Convert to standard relation name
         standard_relation = RELATION_MAP.get(original_relation, original_relation)
 
         source_page = f"_p{min(rel['source_pages'])}" if rel.get('source_pages') else ""
@@ -134,9 +132,9 @@ def main():
 
     edges_df = pd.DataFrame(edge_list).drop_duplicates()
     edges_df.to_csv(OUTPUT_EDGES_PATH, index=False, encoding='utf-8-sig')
-    print(f"エッジリストを {OUTPUT_EDGES_PATH} に保存しました。 ({len(edges_df)}件)")
+    print(f"エッジリストを {OUTPUT_EDGES_PATH} に保存しました。 ({len(edges_df)}件) / Saved edge list to {OUTPUT_EDGES_PATH}. ({len(edges_df)} items)")
 
-    print("--- ステップ5: CSVへのエクスポートが完了しました ---")
+    print("--- ステップ5: CSVへのエクスポートが完了しました --- / --- Step 5: Export to CSV completed ---")
 
     export_normalization_graph()
 

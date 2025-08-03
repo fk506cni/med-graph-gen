@@ -4,17 +4,20 @@ import time
 from .llm_utils import get_gemini_model, llm_generate_with_retry
 
 def load_cleaned_data(file_path):
-    """クレンジングされた段落と出典情報のリストを読み込む"""
+    """クレンジングされた段落と出典情報のリストを読み込む
+    Loads a list of cleaned paragraphs and source information."""
     with open(file_path, 'r', encoding='utf-8') as f:
         return json.load(f)
 
 def load_prompt_template(file_path):
-    """プロンプトテンプレートを読み込む"""
+    """プロンプトテンプレートを読み込む
+    Loads the prompt template."""
     with open(file_path, 'r', encoding='utf-8') as f:
         return f.read()
 
 def extract_entities_with_llm_batch(cleaned_data, prompt_template, model, wait=60, retries=3, batch_size=5):
-    """LLMを使用してエンティティを抽出する（バッチ処理＆リトライ機能付き）"""
+    """LLMを使用してエンティティを抽出する（バッチ処理＆リトライ機能付き）
+    Extracts entities using an LLM (with batch processing and retry functionality)."""
     entity_sources = defaultdict(set)
     paragraphs_to_process = [item['paragraph'] for item in cleaned_data]
 
@@ -26,7 +29,7 @@ def extract_entities_with_llm_batch(cleaned_data, prompt_template, model, wait=6
         prompt = prompt_template.replace("{{JSON_INPUT}}", json.dumps(batch_text, ensure_ascii=False))
         
         try:
-            print(f"エンティティ抽出バッチ {i // batch_size + 1} を開始... ({len(batch_paragraphs)}段落)")
+            print(f"エンティティ抽出バッチ {i // batch_size + 1} を開始... ({len(batch_paragraphs)}段落) / Starting entity extraction batch {i // batch_size + 1}... ({len(batch_paragraphs)} paragraphs)")
             response = llm_generate_with_retry(model, prompt, retries=retries)
             
             response_text = response.text.strip()
@@ -45,14 +48,14 @@ def extract_entities_with_llm_batch(cleaned_data, prompt_template, model, wait=6
                             for page_num in item['source_pages']:
                                 entity_sources[entity_key].add(page_num)
 
-            print(f"エンティティ抽出バッチ {i // batch_size + 1} が完了しました。")
+            print(f"エンティティ抽出バッチ {i // batch_size + 1} が完了しました。 / Entity extraction batch {i // batch_size + 1} completed.")
 
         except Exception as e:
-            print(f"バッチ処理中に致命的なエラーが発生しました: {e}")
+            print(f"バッチ処理中に致命的なエラーが発生しました: {e} / A fatal error occurred during batch processing: {e}")
             continue
         finally:
             if i + batch_size < len(paragraphs_to_process):
-                print(f"{wait}秒待機します...")
+                print(f"{wait}秒待機します... / Waiting for {wait} seconds...")
                 time.sleep(wait)
             
     final_entities = []
@@ -66,21 +69,22 @@ def extract_entities_with_llm_batch(cleaned_data, prompt_template, model, wait=6
     return final_entities
 
 def main(model_name='gemini-1.5-flash-latest', wait=60, retries=3):
-    """メイン処理"""
+    """メイン処理
+    Main process"""
     input_path = "output/step2a_cleaned_text.json"
     prompt_template_path = "entity_extraction_prompt.md"
     output_entities_path = "output/step2b_entities.json"
 
-    print("クレンジングされた段落データを読み込み中...")
+    print("クレンジングされた段落データを読み込み中... / Loading cleaned paragraph data...")
     cleaned_data = load_cleaned_data(input_path)
 
-    print("プロンプトテンプレートを読み込み中...")
+    print("プロンプトテンプレートを読み込み中... / Loading prompt template...")
     prompt_template = load_prompt_template(prompt_template_path)
 
-    print("LLMモデルを初期化中...")
+    print("LLMモデルを初期化中... / Initializing LLM model...")
     model = get_gemini_model(model_name)
 
-    print("LLMを使用してエンティティを抽出中（バッチ処理）...")
+    print("LLMを使用してエンティティを抽出中（バッチ処理）... / Extracting entities using LLM (batch processing)...")
     entities = extract_entities_with_llm_batch(
         cleaned_data, 
         prompt_template, 
@@ -89,12 +93,9 @@ def main(model_name='gemini-1.5-flash-latest', wait=60, retries=3):
         retries=retries
     )
 
-    print(f"抽出されたエンティティを {output_entities_path} に保存中...")
+    print(f"抽出されたエンティティを {output_entities_path} に保存中... / Saving extracted entities to {output_entities_path}...")
     with open(output_entities_path, 'w', encoding='utf-8') as f:
         json.dump(entities, f, ensure_ascii=False, indent=2)
 
-    print("処理が完了しました。")
+    print("処理が完了しました。 / Process completed.")
 
-
-if __name__ == "__main__":
-    main()
